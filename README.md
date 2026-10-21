@@ -27,6 +27,16 @@ PWA mobile en **lecture seule**, conçue pour consulter une copie manuellement i
 - L’application ne transmet pas le fichier SQLite à un serveur. Le moteur SQL.js est chargé depuis jsDelivr lors du premier chargement ; l’accès hors ligne au moteur dépend de la réussite de sa mise en cache.
 - Héberger la PWA via HTTPS (ou localhost pour les tests) pour activer l’installation et le service worker.
 
-## Copie SQLite recommandée
+## Exporter une copie cohérente depuis le PC Gparc
 
-Ne pas copier uniquement le fichier `.db` en cours d’utilisation si Gparc tourne en mode WAL : des écritures validées peuvent encore se trouver dans le fichier WAL. Utiliser l’API de sauvegarde SQLite ou une copie produite par un mécanisme équivalent, puis transférer le fichier de sauvegarde final.
+Le dépôt fournit `tools/export_sqlite_snapshot.py`, un utilitaire Python sans dépendances externes qui utilise l’API de sauvegarde SQLite et vérifie l’intégrité du fichier produit.
+
+Depuis le dossier du dépôt téléchargé, exécuter dans un terminal :
+
+```powershell
+python tools/export_sqlite_snapshot.py "C:\\chemin\\vers\\data\\gparc.db" "C:\\Users\\Public\\gparc-mobile.db"
+```
+
+Remplacer le premier chemin par le chemin réel de la base utilisée par Gparc. Le chemin configuré dans `flask_app/database.py` est `data/gparc.db`, avec repli dans `flask_app/data/` si nécessaire. Si le fichier de destination existe déjà, ajouter `--force` à la commande pour le remplacer. Transférer ensuite `gparc-mobile.db` au téléphone par USB ou copie manuelle et l’importer dans la PWA.
+
+Ne pas copier uniquement le fichier `.db` en cours d’utilisation si Gparc tourne en mode WAL : des écritures validées peuvent encore se trouver dans le fichier WAL. L’utilitaire crée un instantané cohérent et contrôle son intégrité avant de signaler le succès.
