@@ -1,0 +1,16 @@
+{
+  "id": "./",
+  "name": "Gparc Mobile",
+  "short_name": "Gparc",
+  "description": "Consultation mobile en lecture seule du parc informatique Gparc.",
+  "lang": "fr",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f3f6f9",
+  "theme_color": "#123b5d",
+  "orientation": "any",
+  "icons": [
+    { "src": "./icons/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}
