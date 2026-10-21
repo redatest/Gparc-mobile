@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#123b5d">
+  <meta name="description" content="Consultation mobile en lecture seule de Gparc à partir d'une copie SQLite importée manuellement.">
+  <title>Gparc Mobile</title>
+  <link rel="manifest" href="./manifest.json">
+  <link rel="stylesheet" href="./styles.css">
+  <link rel="icon" href="./icons/icon.svg" type="image/svg+xml">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand"><span class="brand-mark">G</span><div><strong>Gparc Mobile</strong><small>Consultation hors ligne</small></div></div>
+    <button id="install-button" class="button button-light hidden" type="button">Installer</button>
+  </header>
+  <main>
+    <section id="import-panel" class="import-panel">
+      <div class="section-heading"><div><p class="eyebrow">BASE LOCALE</p><h1>Importer la base SQLite</h1><p class="muted">Sélectionnez une copie de <code>gparc.db</code> transférée depuis le PC Gparc.</p></div></div>
+      <label class="file-drop" for="db-file"><span class="file-icon">↥</span><strong>Choisir un fichier .db</strong><span>Depuis le téléphone, une clé USB ou les fichiers copiés manuellement</span><input id="db-file" type="file" accept=".db,.sqlite,.sqlite3,application/octet-stream"></label>
+      <div id="import-status" class="status" role="status">Aucune base importée.</div>
+      <p class="notice"><strong>Lecture seule :</strong> cette application ne modifie jamais les données Gparc. L’import remplace la copie locale actuelle.</p>
+    </section>
+    <section id="workspace" class="hidden">
+      <div class="database-banner">
+        <div><span class="status-dot"></span><strong id="db-name">Base importée</strong><small id="db-meta">Copie locale</small></div>
+        <button id="replace-db" class="button button-outline" type="button">Mettre à jour</button>
+      </div>
+      <nav id="navigation" class="nav-tabs" aria-label="Rubriques">
+        <button class="nav-item active" data-view="dashboard">Vue d’ensemble</button>
+        <button class="nav-item" data-view="parc">Parc</button>
+        <button class="nav-item" data-view="pannes">Pannes & interventions</button>
+        <button class="nav-item" data-view="reformes">Réformes</button>
+        <button class="nav-item" data-view="structures">Structures</button>
+        <button class="nav-item" data-view="utilisateurs">Utilisateurs</button>
+        <button class="nav-item" data-view="references">Types, modèles & réparation</button>
+        <button class="nav-item" data-view="parametres">Paramètres</button>
+        <button class="nav-item" data-view="historique">Historiques</button>
+        <button class="nav-item" data-view="schema">Schéma SQLite</button>
+      </nav>
+      <section class="view-header"><div><p class="eyebrow" id="view-eyebrow">TABLEAU DE BORD</p><h1 id="view-title">Vue d’ensemble</h1><p id="view-description" class="muted">Indicateurs calculés à partir de la copie importée.</p></div><div class="view-actions"><span id="row-count" class="row-count"></span><button id="refresh-view" class="button button-outline" type="button">Actualiser</button></div></section>
+      <div id="view-content" aria-live="polite"></div>
+      <footer class="footer-note">Données issues d’un instantané SQLite. Pour consulter les dernières modifications, importez une nouvelle copie depuis Gparc.</footer>
+    </section>
+  </main>
+  <input id="replacement-file" class="hidden" type="file" accept=".db,.sqlite,.sqlite3,application/octet-stream">
+  <script src="https://cdn.jsdelivr.net/npm/sql.js@1.13.0/dist/sql-wasm.js"></script>
+  <script src="./app.js"></script>
+</body>
+</html>
