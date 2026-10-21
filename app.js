@@ -265,6 +265,14 @@
     $("start-screen").classList.remove("hidden");
     $("start-status").textContent="Base locale prête : "+state.dbName;
   }
+  function showStartScreen() {
+    stopScanner();
+    $("scan-panel").classList.add("hidden");
+    $("scan-panel").classList.remove("manual-only");
+    $("workspace").classList.add("hidden");
+    $("import-panel").classList.add("hidden");
+    $("start-screen").classList.remove("hidden");
+  }
   function showMainPage() {
     stopScanner();$("start-screen").classList.add("hidden");$("scan-panel").classList.add("hidden");
     if(state.db){$("import-panel").classList.add("hidden");$("workspace").classList.remove("hidden");renderView("dashboard");}
@@ -595,7 +603,7 @@
     $("close-scan").addEventListener("click",()=>{stopScanner();$("scan-panel").classList.add("hidden");$("scan-panel").classList.remove("manual-only");$("workspace").classList.add("hidden");$("import-panel").classList.add("hidden");$("start-screen").classList.remove("hidden");});
     $("manual-scan-value").addEventListener("input",()=>$("manual-scan-value").classList.remove("scan-value-success"));
     $("manual-scan-form").addEventListener("submit",event=>{event.preventDefault();findScannedEquipment($("manual-scan-value").value);});
-    $("manual-scan-open").addEventListener("click",openManualScan);
+    $("manual-scan-open").addEventListener("click",showStartScreen);
     $("refresh-view").addEventListener("click",()=>renderView(state.view));
     $("db-file").addEventListener("change",event=>importFile(event.target.files?.[0]));
     $("replace-db").addEventListener("click",()=>$("replacement-file").click());
