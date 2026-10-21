@@ -1,7 +1,7 @@
 (() => {
   "use strict";
   const $ = id => document.getElementById(id);
-  const state = { SQL: null, db: null, dbBytes: null, dbName: "", importedAt: "", view: "dashboard", rows: [], filtered: [], page: 1, pageSize: 50, search: "", filter: "all", scanMode: "inventory", scanStream: null, scanFrame: 0, detector: null, detecting: false, scanControls: null, codeReader: null, ocrWorker: null, ocrBusy: false, ocrTimer: 0, ocrLastCandidate: "", ocrCandidateCount: 0 };
+  const state = { SQL: null, db: null, dbBytes: null, dbName: "", importedAt: "", view: "dashboard", rows: [], filtered: [], page: 1, pageSize: 50, search: "", filter: "all", scanMode: "inventory", scanReturnTo: "start", scanStream: null, scanFrame: 0, detector: null, detecting: false, scanControls: null, codeReader: null, ocrWorker: null, ocrBusy: false, ocrTimer: 0, ocrLastCandidate: "", ocrCandidateCount: 0 };
   const PAGE_SIZE = 50;
   const viewInfo = {
     dashboard: ["TABLEAU DE BORD", "Vue d’ensemble", "Indicateurs calculés à partir de la copie importée."],
@@ -270,6 +270,22 @@
     if(state.db){$("import-panel").classList.add("hidden");$("workspace").classList.remove("hidden");renderView("dashboard");}
     else{$("workspace").classList.add("hidden");$("import-panel").classList.remove("hidden");$("import-status").textContent="Importez une copie SQLite pour consulter les équipements ou utiliser le scan.";}
   }
+  function openManualScan() {
+    stopScanner();
+    state.scanReturnTo = "workspace";
+    $("start-screen").classList.add("hidden");
+    $("import-panel").classList.add("hidden");
+    $("workspace").classList.add("hidden");
+    $("scan-panel").classList.remove("hidden");
+    $("scan-panel").classList.add("manual-only");
+    $("scan-title").textContent = state.scanMode === "inventory" ? "Saisie manuelle du numéro d’inventaire" : "Saisie manuelle du numéro de série";
+    $("scan-status").className = "status";
+    $("scan-status").textContent = "Saisissez le numéro ci-dessous, puis appuyez sur « Rechercher ». ";
+    $("manual-scan-value").value = "";
+    $("manual-scan-value").classList.remove("scan-value-success");
+    $("manual-scan-value").placeholder = state.scanMode === "inventory" ? "Numéro d’inventaire" : "Numéro de série";
+    $("manual-scan-value").focus();
+  }
   function stopScanner() {
     if(state.scanFrame)cancelAnimationFrame(state.scanFrame);
     if(state.ocrTimer)clearTimeout(state.ocrTimer);
@@ -282,6 +298,8 @@
   async function startScanner(mode) {
     stopScanner();
     state.scanMode=mode;
+    state.scanReturnTo="start";
+    $("scan-panel").classList.remove("manual-only");
     $("start-screen").classList.add("hidden");$("import-panel").classList.add("hidden");$("workspace").classList.add("hidden");$("scan-panel").classList.remove("hidden");
     $("scan-title").textContent=mode==="inventory"?"Scanner le numéro d’inventaire":"Scanner le numéro de série";
     $("manual-scan-value").value="";$("scan-status").className="status";
@@ -366,6 +384,8 @@
   async function startOCR(mode) {
     stopScanner();
     state.scanMode = mode;
+    state.scanReturnTo = "start";
+    $("scan-panel").classList.remove("manual-only");
     $("start-screen").classList.add("hidden"); $("import-panel").classList.add("hidden"); $("workspace").classList.add("hidden"); $("scan-panel").classList.remove("hidden");
     $("scan-title").textContent = mode === "inventory" ? "Lire le numéro d’inventaire (OCR)" : "Lire le numéro de série (OCR)";
     $("scan-status").className = "status";
@@ -572,9 +592,10 @@
     $("scan-serial").addEventListener("click",()=>startScanner("serial"));
     $("ocr-inventory").addEventListener("click",()=>startOCR("inventory"));
     $("ocr-serial").addEventListener("click",()=>startOCR("serial"));
-    $("close-scan").addEventListener("click",()=>{stopScanner();$("scan-panel").classList.add("hidden");$("start-screen").classList.remove("hidden");});
+    $("close-scan").addEventListener("click",()=>{stopScanner();$("scan-panel").classList.add("hidden");$("scan-panel").classList.remove("manual-only");if(state.scanReturnTo==="workspace"&&state.db){$("workspace").classList.remove("hidden");renderView(state.view);}else{$("start-screen").classList.remove("hidden");}});
     $("manual-scan-value").addEventListener("input",()=>$("manual-scan-value").classList.remove("scan-value-success"));
     $("manual-scan-form").addEventListener("submit",event=>{event.preventDefault();findScannedEquipment($("manual-scan-value").value);});
+    $("manual-scan-open").addEventListener("click",openManualScan);
     $("refresh-view").addEventListener("click",()=>renderView(state.view));
     $("db-file").addEventListener("change",event=>importFile(event.target.files?.[0]));
     $("replace-db").addEventListener("click",()=>$("replacement-file").click());
