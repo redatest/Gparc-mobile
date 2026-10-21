@@ -286,61 +286,83 @@
     $("manual-scan-value").value="";$("scan-status").className="status";
     if(!state.db){$("scan-status").textContent="Aucune base locale importée. Importez d’abord le fichier SQLite.";return;}
     if(!navigator.mediaDevices?.getUserMedia){$("scan-status").textContent="Caméra indisponible. Ouvrez l’application dans un navigateur compatible et saisissez le numéro ci-dessous.";return;}
-    if(!window.ZXing?.BrowserMultiFormatReader){$("scan-status").textContent="Le moteur de scan n’a pas pu être chargé. Vérifiez la connexion puis rechargez la page, ou saisissez le numéro manuellement.";return;}
     try {
-      const formats = [
-        ZXing.BarcodeFormat.CODE_128,
-        ZXing.BarcodeFormat.CODE_39,
-        ZXing.BarcodeFormat.CODE_93,
-        ZXing.BarcodeFormat.EAN_13,
-        ZXing.BarcodeFormat.EAN_8,
-        ZXing.BarcodeFormat.UPC_A,
-        ZXing.BarcodeFormat.UPC_E,
-        ZXing.BarcodeFormat.ITF,
-        ZXing.BarcodeFormat.CODABAR
-      ].filter(format => format !== undefined);
-      const hints = new Map();
-      hints.set(ZXing.DecodeHintType.TRY_HARDER, true);
-      if (formats.length) hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS, formats);
-      state.codeReader = new ZXing.BrowserMultiFormatReader(hints, {
-        delayBetweenScanAttempts: 120,
-        delayBetweenScanSuccess: 350
+      const video=$("scanner-video");
+      video.setAttribute("autoplay","");
+      video.setAttribute("playsinline","");
+      video.muted=true;
+      $("scan-status").textContent="Activation de la caméra arrière…";
+      state.scanStream=await navigator.mediaDevices.getUserMedia({
+        audio:false,
+        video:{facingMode:{ideal:"environment"},width:{ideal:1920},height:{ideal:1080},focusMode:{ideal:"continuous"}}
       });
-      $("scan-status").textContent = "Activation de la caméra arrière…";
-      const video = $("scanner-video");
-      video.setAttribute("autoplay", "");
-      video.setAttribute("playsinline", "");
-      video.muted = true;
-      state.detecting = true;
-      state.scanControls = await state.codeReader.decodeFromConstraints({
-        audio: false,
-        video: {
-          facingMode: { ideal: "environment" },
-          width: { ideal: 1920 },
-          height: { ideal: 1080 },
-          focusMode: "continuous"
+      video.srcObject=state.scanStream;
+      await video.play();
+      state.detecting=true;
+
+      // Prefer the browser's native detector on Android Chrome; retain ZXing as fallback.
+      if("BarcodeDetector" in window) {
+        let detector;
+        try {
+          const supported=await window.BarcodeDetector.getSupportedFormats();
+          const wanted=["code_128","code_39","code_93","ean_13","ean_8","upc_a","upc_e","itf","codabar","qr_code"];
+          const formats=wanted.filter(format=>supported.includes(format));
+          detector=new window.BarcodeDetector(formats.length?{formats}:undefined);
+        } catch(error) { detector=null; }
+        if(detector) {
+          $("scan-status").textContent="Caméra active. Analyse du code-barres…";
+          const detectFrame=async()=>{
+            if(!state.detecting||!video.videoWidth){state.scanFrame=requestAnimationFrame(detectFrame);return;}
+            try {
+              const results=await detector.detect(video);
+              const hit=results.find(item=>item.rawValue);
+              if(hit&&state.detecting){
+                state.detecting=false;
+                const value=String(hit.rawValue).trim();
+                stopScanner();
+                $("scan-status").textContent="Code détecté : "+value;
+                findScannedEquipment(value);
+                return;
+              }
+            } catch(error) { /* Continue trying while the camera is active. */ }
+            if(state.detecting) state.scanFrame=requestAnimationFrame(detectFrame);
+          };
+          state.scanFrame=requestAnimationFrame(detectFrame);
+          return;
         }
-      }, video, (result, error, controls) => {
-        if (controls && !state.scanControls) state.scanControls = controls;
-        if (!result || !state.detecting) return;
-        const value = String(result.getText() || "").trim();
-        if (!value) return;
-        state.detecting = false;
+      }
+
+      if(!window.ZXing?.BrowserMultiFormatReader) {
+        $("scan-status").textContent="Le moteur de lecture n’est pas disponible. Saisissez le numéro manuellement.";
+        return;
+      }
+      const formats=[
+        ZXing.BarcodeFormat.CODE_128,ZXing.BarcodeFormat.CODE_39,ZXing.BarcodeFormat.CODE_93,
+        ZXing.BarcodeFormat.EAN_13,ZXing.BarcodeFormat.EAN_8,ZXing.BarcodeFormat.UPC_A,
+        ZXing.BarcodeFormat.UPC_E,ZXing.BarcodeFormat.ITF,ZXing.BarcodeFormat.CODABAR
+      ].filter(format=>format!==undefined);
+      const hints=new Map();
+      hints.set(ZXing.DecodeHintType.TRY_HARDER,true);
+      if(formats.length) hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS,formats);
+      state.codeReader=new ZXing.BrowserMultiFormatReader(hints,120);
+      $("scan-status").textContent="Caméra active. Analyse du code-barres…";
+      state.scanControls=await state.codeReader.decodeFromVideoElement(video,(result,error)=>{
+        if(!result||!state.detecting)return;
+        const value=String(result.getText()||"").trim();
+        if(!value)return;
+        state.detecting=false;
         stopScanner();
-        $("scan-status").textContent = "Code détecté : " + value;
+        $("scan-status").textContent="Code détecté : "+value;
         findScannedEquipment(value);
       });
-      if (state.detecting) {
-        $("scan-status").textContent = "Caméra active. Approchez le code, gardez-le net et évitez les reflets.";
-      }
     } catch(error) {
       stopScanner();
-      const message = error.name === "NotAllowedError"
-        ? "Accès caméra refusé. Autorisez la caméra dans les réglages du navigateur."
-        : error.name === "NotFoundError"
-          ? "Aucune caméra compatible détectée sur cet appareil."
-          : "Impossible d’activer la caméra : " + (error.message || "vérifiez les permissions.");
-      $("scan-status").textContent = message + " Vous pouvez saisir le numéro manuellement.";
+      const message=error.name==="NotAllowedError"
+        ?"Accès caméra refusé. Autorisez la caméra dans les réglages du navigateur."
+        :error.name==="NotFoundError"
+          ?"Aucune caméra compatible détectée sur cet appareil."
+          :"Impossible d’activer la caméra : "+(error.message||"vérifiez les permissions.");
+      $("scan-status").textContent=message+" Vous pouvez saisir le numéro manuellement.";
     }
   }
   function findScannedEquipment(rawValue) {
