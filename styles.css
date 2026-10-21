@@ -35,3 +35,12 @@
   color: #087443;
   font-weight: 800;
 }
+
+
+/* Masquer la caméra lorsque l'utilisateur choisit la saisie manuelle depuis le parc. */
+#scan-panel.manual-only .scanner-frame {
+  display: none;
+}
+#scan-panel.manual-only .manual-scan-form {
+  margin-top: 18px;
+}
