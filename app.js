@@ -99,8 +99,8 @@
     return '<section class="panel"><h2>' + esc(title) + '</h2>' + items.slice(0, 10).map(item => '<div class="bar-row"><span>' + esc(item[labelKey] || "Non renseigné") + '</span><div class="bar-track"><div class="bar-fill" style="width:' + Math.max(0, Math.min(100, asNum(item[valueKey]) / max * 100)) + '%"></div></div><span class="bar-value">' + asNum(item[valueKey]) + '</span></div>').join("") + '</section>';
   }
   function dashboard() {
-    const materiels = allActive("materiel");
-    const pannes = allActive("panne");
+    const materiels = joinedMateriels();
+    const pannes = joinedPannes();
     const livePannes = pannes.filter(row => ["EP", "ER", "EC", "AT"].includes(String(row.eta_pan || "").toUpperCase()));
     const repairs = pannes.filter(row => ["ER", "AT"].includes(String(row.eta_pan || "").toUpperCase()));
     const repaired = pannes.filter(row => ["RP", "IR"].includes(String(row.eta_pan || "").toUpperCase()));
