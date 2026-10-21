@@ -302,25 +302,16 @@
       const hints = new Map();
       hints.set(ZXing.DecodeHintType.TRY_HARDER, true);
       if (formats.length) hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS, formats);
-      state.codeReader = new ZXing.BrowserMultiFormatReader(hints, {
-        delayBetweenScanAttempts: 120,
-        delayBetweenScanSuccess: 350
-      });
+      // ZXing 0.21 BrowserMultiFormatReader expects a numeric scan delay here.
+      // Passing an options object can break the decoder loop on some devices.
+      state.codeReader = new ZXing.BrowserMultiFormatReader(hints, 250);
       $("scan-status").textContent = "Activation de la caméra arrière…";
       const video = $("scanner-video");
       video.setAttribute("autoplay", "");
       video.setAttribute("playsinline", "");
       video.muted = true;
       state.detecting = true;
-      state.scanControls = await state.codeReader.decodeFromConstraints({
-        audio: false,
-        video: {
-          facingMode: { ideal: "environment" },
-          width: { ideal: 1920 },
-          height: { ideal: 1080 },
-          focusMode: "continuous"
-        }
-      }, video, (result, error, controls) => {
+      state.scanControls = await state.codeReader.decodeFromVideoDevice(undefined, video, (result, error, controls) => {
         if (controls && !state.scanControls) state.scanControls = controls;
         if (!result || !state.detecting) return;
         const value = String(result.getText() || "").trim();
