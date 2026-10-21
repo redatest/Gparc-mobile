@@ -15,7 +15,7 @@ self.addEventListener("fetch", event => {
       if (response.ok) caches.open(CACHE_NAME).then(cache => cache.put(request, response.clone()));
       return response;
     }).catch(() => caches.match("./index.html"))));
-  } else if (url.hostname === "cdn.jsdelivr.net" && /sql\.js|sql-wasm\.wasm/.test(url.pathname)) {
+  } else if (url.hostname === "cdn.jsdelivr.net" && /sql(?:-wasm)?\.(?:js|wasm)/.test(url.pathname)) {
     event.respondWith(caches.match(request).then(cached => cached || fetch(request).then(response => {
       if (response.ok || response.type === "opaque") caches.open(CACHE_NAME).then(cache => cache.put(request, response.clone()));
       return response;
