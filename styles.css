@@ -21,3 +21,17 @@
   background: #fdebea;
   border-color: #f2b7b3;
 }
+
+
+/* Valeur reconnue par le scanner : mise en évidence avant validation manuelle. */
+.manual-scan-row input.scan-value-success {
+  color: #087443;
+  background: #edfff5;
+  border: 2px solid #15945b;
+  font-weight: 800;
+  box-shadow: 0 0 0 3px rgba(21, 148, 91, .12);
+}
+.status.scan-result-success {
+  color: #087443;
+  font-weight: 800;
+}
