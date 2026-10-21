@@ -592,7 +592,7 @@
     $("scan-serial").addEventListener("click",()=>startScanner("serial"));
     $("ocr-inventory").addEventListener("click",()=>startOCR("inventory"));
     $("ocr-serial").addEventListener("click",()=>startOCR("serial"));
-    $("close-scan").addEventListener("click",()=>{stopScanner();$("scan-panel").classList.add("hidden");$("scan-panel").classList.remove("manual-only");if(state.scanReturnTo==="workspace"&&state.db){$("workspace").classList.remove("hidden");renderView(state.view);}else{$("start-screen").classList.remove("hidden");}});
+    $("close-scan").addEventListener("click",()=>{stopScanner();$("scan-panel").classList.add("hidden");$("scan-panel").classList.remove("manual-only");$("workspace").classList.add("hidden");$("import-panel").classList.add("hidden");$("start-screen").classList.remove("hidden");});
     $("manual-scan-value").addEventListener("input",()=>$("manual-scan-value").classList.remove("scan-value-success"));
     $("manual-scan-form").addEventListener("submit",event=>{event.preventDefault();findScannedEquipment($("manual-scan-value").value);});
     $("manual-scan-open").addEventListener("click",openManualScan);
