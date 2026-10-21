@@ -1,7 +1,7 @@
 (() => {
   "use strict";
   const $ = id => document.getElementById(id);
-  const state = { SQL: null, db: null, dbBytes: null, dbName: "", importedAt: "", view: "dashboard", rows: [], filtered: [], page: 1, pageSize: 50, search: "", filter: "all" };
+  const state = { SQL: null, db: null, dbBytes: null, dbName: "", importedAt: "", view: "dashboard", rows: [], filtered: [], page: 1, pageSize: 50, search: "", filter: "all", scanMode: "inventory", scanStream: null, scanFrame: 0, detector: null, detecting: false };
   const PAGE_SIZE = 50;
   const viewInfo = {
     dashboard: ["TABLEAU DE BORD", "Vue d’ensemble", "Indicateurs calculés à partir de la copie importée."],
@@ -259,8 +259,42 @@
     state.db = next; state.dbBytes = bytes; state.dbName=name||"gparc.db"; state.importedAt=importedAt||new Date().toISOString();
     $("db-name").textContent=state.dbName;
     $("db-meta").textContent="Importée le "+new Date(state.importedAt).toLocaleString("fr-FR")+" · Lecture seule";
-    $("import-panel").classList.add("hidden");$("workspace").classList.remove("hidden");
-    renderView("dashboard");
+    $("import-panel").classList.add("hidden");
+    $("workspace").classList.add("hidden");
+    $("scan-panel").classList.add("hidden");
+    $("start-screen").classList.remove("hidden");
+    $("start-status").textContent="Base locale prête : "+state.dbName;
+  }
+  function showMainPage() {
+    stopScanner();$("start-screen").classList.add("hidden");$("scan-panel").classList.add("hidden");
+    if(state.db){$("import-panel").classList.add("hidden");$("workspace").classList.remove("hidden");renderView("dashboard");}
+    else{$("workspace").classList.add("hidden");$("import-panel").classList.remove("hidden");$("import-status").textContent="Importez une copie SQLite pour consulter les équipements ou utiliser le scan.";}
+  }
+  function stopScanner() {
+    if(state.scanFrame)cancelAnimationFrame(state.scanFrame);state.scanFrame=0;state.detecting=false;
+    if(state.scanStream){state.scanStream.getTracks().forEach(track=>track.stop());state.scanStream=null;}
+    const video=$("scanner-video");if(video)video.srcObject=null;
+  }
+  async function startScanner(mode) {
+    state.scanMode=mode;$("start-screen").classList.add("hidden");$("import-panel").classList.add("hidden");$("workspace").classList.add("hidden");$("scan-panel").classList.remove("hidden");
+    $("scan-title").textContent=mode==="inventory"?"Scanner le numéro d’inventaire":"Scanner le numéro de série";$("manual-scan-value").value="";$("scan-status").className="status";
+    if(!state.db){$("scan-status").textContent="Aucune base locale importée. Importez d’abord le fichier SQLite.";return;}
+    if(!navigator.mediaDevices?.getUserMedia){$("scan-status").textContent="Caméra indisponible. Saisissez le numéro ci-dessous.";return;}
+    if(!("BarcodeDetector" in window)){$("scan-status").textContent="Scan automatique non pris en charge par ce navigateur. Saisissez le numéro ci-dessous.";return;}
+    try{state.detector=new BarcodeDetector({formats:["code_128","code_39","ean_13","ean_8","upc_a","upc_e","itf","qr_code","data_matrix"]});state.scanStream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:"environment"}},audio:false});const video=$("scanner-video");video.srcObject=state.scanStream;await video.play();$("scan-status").textContent="Caméra active. Présentez le code-barres dans le cadre.";scanFrame();}
+    catch(error){stopScanner();$("scan-status").textContent=error.name==="NotAllowedError"?"Accès caméra refusé. Autorisez la caméra ou saisissez le numéro.":"Impossible d’activer la caméra. Saisissez le numéro manuellement.";}
+  }
+  async function scanFrame() {
+    if(!state.scanStream||$("scan-panel").classList.contains("hidden"))return;const video=$("scanner-video");
+    if(!state.detecting&&video.readyState>=2&&state.detector){state.detecting=true;try{const codes=await state.detector.detect(video);if(codes.length&&codes[0].rawValue){const value=codes[0].rawValue.trim();stopScanner();findScannedEquipment(value);return;}}catch(error){$("scan-status").textContent="Lecture impossible. Ajustez le cadrage ou saisissez le numéro manuellement.";}finally{state.detecting=false;}}
+    if(state.scanStream)state.scanFrame=requestAnimationFrame(scanFrame);
+  }
+  function findScannedEquipment(rawValue) {
+    const value=String(rawValue||"").trim();if(!value||!state.db)return;stopScanner();
+    const column=state.scanMode==="inventory"?"num_inv":"num_ser";const matches=joinedMateriels().filter(row=>normalize(row[column])===normalize(value));
+    $("start-status").textContent=matches.length?matches.length+" équipement(s) trouvé(s) pour « "+value+" ».":"Aucun équipement trouvé pour "+(state.scanMode==="inventory"?"le numéro d’inventaire":"le numéro de série")+" « "+value+" ». Vérifiez le mode de scan.";
+    $("scan-panel").classList.add("hidden");$("start-screen").classList.remove("hidden");
+    if(matches.length){showMainPage();renderView("parc");const search=$("table-search");if(search){search.value=value;search.dispatchEvent(new Event("input",{bubbles:true}));}}
   }
   function openStore() {
     return new Promise((resolve,reject)=>{
@@ -319,6 +353,11 @@
   }
   async function init() {
     document.querySelectorAll(".nav-item").forEach(button=>button.addEventListener("click",()=>renderView(button.dataset.view)));
+    $("open-main").addEventListener("click",showMainPage);
+    $("scan-inventory").addEventListener("click",()=>startScanner("inventory"));
+    $("scan-serial").addEventListener("click",()=>startScanner("serial"));
+    $("close-scan").addEventListener("click",()=>{stopScanner();$("scan-panel").classList.add("hidden");$("start-screen").classList.remove("hidden");});
+    $("manual-scan-form").addEventListener("submit",event=>{event.preventDefault();findScannedEquipment($("manual-scan-value").value);});
     $("refresh-view").addEventListener("click",()=>renderView(state.view));
     $("db-file").addEventListener("change",event=>importFile(event.target.files?.[0]));
     $("replace-db").addEventListener("click",()=>$("replacement-file").click());
