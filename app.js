@@ -1,7 +1,7 @@
 (() => {
   "use strict";
   const $ = id => document.getElementById(id);
-  const state = { SQL: null, db: null, dbBytes: null, dbName: "", importedAt: "", view: "dashboard", rows: [], filtered: [], page: 1, pageSize: 50, search: "", filter: "all", scanMode: "inventory", scanStream: null, scanFrame: 0, detector: null, detecting: false, scanControls: null, codeReader: null };
+  const state = { SQL: null, db: null, dbBytes: null, dbName: "", importedAt: "", view: "dashboard", rows: [], filtered: [], page: 1, pageSize: 50, search: "", filter: "all", scanMode: "inventory", scanStream: null, scanFrame: 0, detector: null, detecting: false, scanControls: null, codeReader: null, ocrWorker: null, ocrBusy: false, ocrTimer: 0, ocrLastCandidate: "", ocrCandidateCount: 0 };
   const PAGE_SIZE = 50;
   const viewInfo = {
     dashboard: ["TABLEAU DE BORD", "Vue d’ensemble", "Indicateurs calculés à partir de la copie importée."],
@@ -272,7 +272,8 @@
   }
   function stopScanner() {
     if(state.scanFrame)cancelAnimationFrame(state.scanFrame);
-    state.scanFrame=0;state.detecting=false;
+    if(state.ocrTimer)clearTimeout(state.ocrTimer);
+    state.ocrTimer=0;state.ocrBusy=false;state.scanFrame=0;state.detecting=false;
     if(state.scanControls){try{state.scanControls.stop();}catch(error){}state.scanControls=null;}
     if(state.codeReader){try{state.codeReader.reset();}catch(error){}}
     if(state.scanStream){state.scanStream.getTracks().forEach(track=>track.stop());state.scanStream=null;}
@@ -364,6 +365,86 @@
       $("scan-status").textContent = message + " Vous pouvez saisir le numéro manuellement.";
     }
   }
+  async function startOCR(mode) {
+    stopScanner();
+    state.scanMode = mode;
+    $("start-screen").classList.add("hidden"); $("import-panel").classList.add("hidden"); $("workspace").classList.add("hidden"); $("scan-panel").classList.remove("hidden");
+    $("scan-title").textContent = mode === "inventory" ? "Lire le numéro d’inventaire (OCR)" : "Lire le numéro de série (OCR)";
+    $("scan-status").className = "status";
+    $("scan-status").textContent = "Préparation de la reconnaissance de texte hors ligne…";
+    $("manual-scan-value").value = "";
+    if (!state.db) { $("scan-status").textContent = "Importez d’abord une base SQLite."; return; }
+    if (!navigator.mediaDevices?.getUserMedia) { $("scan-status").textContent = "Caméra indisponible. Saisissez le numéro manuellement."; return; }
+    if (!window.Tesseract?.createWorker) { $("scan-status").textContent = "Le moteur OCR n’est pas chargé. Connectez-vous une fois, rechargez l’application puis réessayez."; return; }
+    try {
+      const video = $("scanner-video");
+      video.setAttribute("autoplay", ""); video.setAttribute("playsinline", ""); video.muted = true;
+      state.scanStream = await navigator.mediaDevices.getUserMedia({ audio: false, video: { facingMode: { ideal: "environment" }, width: { ideal: 1920 }, height: { ideal: 1080 } } });
+      video.srcObject = state.scanStream;
+      await video.play();
+      if (!state.ocrWorker) {
+        $("scan-status").textContent = "Chargement du modèle OCR (première préparation : connexion Internet requise)…";
+        state.ocrWorker = await Tesseract.createWorker("eng", 1, {
+          workerPath: "https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/worker.min.js",
+          corePath: "https://cdn.jsdelivr.net/npm/tesseract.js-core@5.1.1",
+          langPath: "https://tessdata.projectnaptha.com/4.0.0",
+          cacheMethod: "write",
+          gzip: true
+        });
+        await state.ocrWorker.setParameters({
+          tessedit_char_whitelist: "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz-./",
+          tessedit_pageseg_mode: "7"
+        });
+      }
+      state.detecting = true;
+      state.ocrLastCandidate = ""; state.ocrCandidateCount = 0;
+      const materiels = joinedMateriels();
+      const column = state.scanMode === "inventory" ? "num_inv" : "num_ser";
+      $("scan-status").textContent = "OCR actif. Placez le numéro imprimé dans le cadre et maintenez le téléphone stable.";
+      const canvas = document.createElement("canvas");
+      const context = canvas.getContext("2d", { willReadFrequently: true });
+      const scanOCRFrame = async () => {
+        if (!state.detecting || !video.srcObject) return;
+        if (!state.ocrBusy && video.videoWidth && video.videoHeight) {
+          state.ocrBusy = true;
+          try {
+            const sx = Math.round(video.videoWidth * 0.12), sy = Math.round(video.videoHeight * 0.30);
+            const sw = Math.round(video.videoWidth * 0.76), sh = Math.round(video.videoHeight * 0.40);
+            canvas.width = sw * 2; canvas.height = sh * 2;
+            context.drawImage(video, sx, sy, sw, sh, 0, 0, canvas.width, canvas.height);
+            const { data } = await state.ocrWorker.recognize(canvas);
+            const words = (data.text || "").toUpperCase().match(/[A-Z0-9][A-Z0-9./-]{4,}/g) || [];
+            const candidates = words.map(value => value.replace(/[^A-Z0-9./-]/g, ""));
+            const matched = candidates.find(candidate => materiels.some(row => normalize(row[column]) === normalize(candidate)));
+            if (matched) {
+              if (state.ocrLastCandidate === matched) state.ocrCandidateCount++;
+              else { state.ocrLastCandidate = matched; state.ocrCandidateCount = 1; }
+              $("scan-status").textContent = "Numéro reconnu : " + matched + " · confirmation " + state.ocrCandidateCount + "/2";
+              if (state.ocrCandidateCount >= 2) {
+                state.detecting = false; stopScanner();
+                $("scan-status").textContent = "Texte reconnu : " + matched;
+                findScannedEquipment(matched);
+                return;
+              }
+            } else {
+              state.ocrLastCandidate = ""; state.ocrCandidateCount = 0;
+              $("scan-status").textContent = candidates[0]
+                ? "Texte détecté : « " + candidates[0] + " », mais aucun numéro correspondant trouvé. Ajustez le cadrage."
+                : "Recherche OCR en cours… placez le numéro imprimé dans le cadre.";
+            }
+          } catch (ocrError) {
+            console.warn("Erreur de reconnaissance OCR", ocrError);
+            $("scan-status").textContent = "Reconnaissance en cours. Gardez le numéro net et bien éclairé.";
+          } finally { state.ocrBusy = false; }
+        }
+        if (state.detecting) state.ocrTimer = window.setTimeout(scanOCRFrame, 900);
+      };
+      state.ocrTimer = window.setTimeout(scanOCRFrame, 300);
+    } catch (error) {
+      stopScanner();
+      $("scan-status").textContent = "Impossible de démarrer l’OCR : " + (error.message || "vérifiez les permissions et la connexion lors de la première préparation.");
+    }
+  }
   function findScannedEquipment(rawValue) {
     const value=String(rawValue||"").trim();if(!value||!state.db)return;stopScanner();
     const column=state.scanMode==="inventory"?"num_inv":"num_ser";const matches=joinedMateriels().filter(row=>normalize(row[column])===normalize(value));
@@ -434,6 +515,8 @@
     $("open-main").addEventListener("click",showMainPage);
     $("scan-inventory").addEventListener("click",()=>startScanner("inventory"));
     $("scan-serial").addEventListener("click",()=>startScanner("serial"));
+    $("ocr-inventory").addEventListener("click",()=>startOCR("inventory"));
+    $("ocr-serial").addEventListener("click",()=>startOCR("serial"));
     $("close-scan").addEventListener("click",()=>{stopScanner();$("scan-panel").classList.add("hidden");$("start-screen").classList.remove("hidden");});
     $("manual-scan-form").addEventListener("submit",event=>{event.preventDefault();findScannedEquipment($("manual-scan-value").value);});
     $("refresh-view").addEventListener("click",()=>renderView(state.view));
