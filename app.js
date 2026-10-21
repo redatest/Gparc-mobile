@@ -315,8 +315,7 @@
               if (value) {
                 state.detecting = false;
                 stopScanner();
-                $("scan-status").textContent = "Code détecté : " + value;
-                findScannedEquipment(value);
+                showScannedValue(value);
                 return;
               }
             }
@@ -351,8 +350,7 @@
         if (!value) return;
         state.detecting = false;
         stopScanner();
-        $("scan-status").textContent = "Code détecté : " + value;
-        findScannedEquipment(value);
+        showScannedValue(value);
       });
       if (state.detecting) $("scan-status").textContent = "Caméra active. Approchez le code, gardez-le net et évitez les reflets.";
     } catch(error) {
@@ -465,8 +463,8 @@
               else { state.ocrLastCandidate = matched; state.ocrCandidateCount = 1; }
               $("scan-status").textContent = "Numéro probable : " + matched + " · confirmation " + state.ocrCandidateCount + "/2";
               if (state.ocrCandidateCount >= 2) {
-                state.detecting = false; stopScanner();
-                findScannedEquipment(matched);
+                state.detecting = false;
+                showScannedValue(matched);
                 return;
               }
             } else {
@@ -490,6 +488,17 @@
   }
   function normalizeCode(value) {
     return String(value == null ? "" : value).toUpperCase().replace(/[^A-Z0-9]/g, "");
+  }
+  function showScannedValue(rawValue) {
+    const value = String(rawValue || "").trim();
+    if (!value) return;
+    stopScanner();
+    const field = $("manual-scan-value");
+    field.value = value;
+    field.classList.add("scan-value-success");
+    $("scan-status").className = "status scan-result-success";
+    $("scan-status").textContent = "Lecture réussie : « " + value + " ». Le numéro est prêt dans le champ vert ; appuyez sur « Rechercher » pour afficher l’équipement.";
+    field.focus();
   }
   function findScannedEquipment(rawValue) {
     const value=String(rawValue||"").trim();if(!value||!state.db)return;stopScanner();
@@ -564,6 +573,7 @@
     $("ocr-inventory").addEventListener("click",()=>startOCR("inventory"));
     $("ocr-serial").addEventListener("click",()=>startOCR("serial"));
     $("close-scan").addEventListener("click",()=>{stopScanner();$("scan-panel").classList.add("hidden");$("start-screen").classList.remove("hidden");});
+    $("manual-scan-value").addEventListener("input",()=>$("manual-scan-value").classList.remove("scan-value-success"));
     $("manual-scan-form").addEventListener("submit",event=>{event.preventDefault();findScannedEquipment($("manual-scan-value").value);});
     $("refresh-view").addEventListener("click",()=>renderView(state.view));
     $("db-file").addEventListener("change",event=>importFile(event.target.files?.[0]));
