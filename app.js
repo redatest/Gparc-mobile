@@ -442,8 +442,24 @@
             canvas.width = Math.max(1, Math.round(sw * scale)); canvas.height = Math.max(1, Math.round(sh * scale));
             context.drawImage(video, sx, sy, sw, sh, 0, 0, canvas.width, canvas.height);
             const { data } = await state.ocrWorker.recognize(canvas);
-            const tokens = (data.text || "").toUpperCase().match(/[A-Z0-9][A-Z0-9./-]{3,}/g) || [];
-            const matched = tokens.map(matchCandidate).find(Boolean);
+            const recognizedText = String(data.text || "").toUpperCase();
+            const tokens = recognizedText.match(/[A-Z0-9][A-Z0-9./-]{3,}/g) || [];
+            // First search the entire OCR result after removing spaces/punctuation. This catches
+            // the right number even when Tesseract splits it into several tokens or reads extra text.
+            const normalizedText = normalizeCode(recognizedText);
+            let matched = canonical.find(item => normalizedText.includes(item.key))?.raw || null;
+            if (!matched) matched = tokens.map(matchCandidate).find(Boolean) || null;
+            // If OCR splits a serial into adjacent pieces, also test joined token windows.
+            if (!matched && tokens.length > 1) {
+              for (let i = 0; i < tokens.length && !matched; i++) {
+                let joined = "";
+                for (let j = i; j < Math.min(tokens.length, i + 4); j++) {
+                  joined += tokens[j];
+                  matched = matchCandidate(joined);
+                  if (matched) break;
+                }
+              }
+            }
             if (matched) {
               if (state.ocrLastCandidate === matched) state.ocrCandidateCount++;
               else { state.ocrLastCandidate = matched; state.ocrCandidateCount = 1; }
