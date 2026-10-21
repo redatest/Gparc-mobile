@@ -1,4 +1,4 @@
-const CACHE_NAME = "gparc-mobile-shell-v12";
+const CACHE_NAME = "gparc-mobile-shell-v13";
 const APP_SHELL = ["./", "./index.html", "./styles.css", "./app.js", "./manifest.json", "./icons/icon.svg"];
 
 self.addEventListener("install", event => {
@@ -49,7 +49,7 @@ self.addEventListener("fetch", event => {
         }).catch(() => caches.match("./index.html")))
       );
     }
-  } else if (url.hostname === "cdn.jsdelivr.net" && (/sql(?:-wasm)?\.(?:js|wasm)/.test(url.pathname) || url.pathname.includes("/npm/@zxing/library@"))) {
+  } else if (((url.hostname === "cdn.jsdelivr.net" && (/sql(?:-wasm)?\.(?:js|wasm)/.test(url.pathname) || url.pathname.includes("/npm/@zxing/library@") || url.pathname.includes("/npm/tesseract.js@") || url.pathname.includes("/npm/tesseract.js-core@"))) || url.hostname === "tessdata.projectnaptha.com")) {
     event.respondWith(
       caches.match(request).then(cached => cached || fetch(request).then(response => {
         if (response.ok || response.type === "opaque") {
