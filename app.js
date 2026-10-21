@@ -1,7 +1,7 @@
 (() => {
   "use strict";
   const $ = id => document.getElementById(id);
-  const state = { SQL: null, db: null, dbBytes: null, dbName: "", importedAt: "", view: "dashboard", rows: [], filtered: [], page: 1, pageSize: 50, search: "", filter: "all", scanMode: "inventory", scanStream: null, scanFrame: 0, detector: null, detecting: false };
+  const state = { SQL: null, db: null, dbBytes: null, dbName: "", importedAt: "", view: "dashboard", rows: [], filtered: [], page: 1, pageSize: 50, search: "", filter: "all", scanMode: "inventory", scanStream: null, scanFrame: 0, detector: null, detecting: false, scanControls: null, codeReader: null };
   const PAGE_SIZE = 50;
   const viewInfo = {
     dashboard: ["TABLEAU DE BORD", "Vue d’ensemble", "Indicateurs calculés à partir de la copie importée."],
@@ -271,23 +271,42 @@
     else{$("workspace").classList.add("hidden");$("import-panel").classList.remove("hidden");$("import-status").textContent="Importez une copie SQLite pour consulter les équipements ou utiliser le scan.";}
   }
   function stopScanner() {
-    if(state.scanFrame)cancelAnimationFrame(state.scanFrame);state.scanFrame=0;state.detecting=false;
+    if(state.scanFrame)cancelAnimationFrame(state.scanFrame);
+    state.scanFrame=0;state.detecting=false;
+    if(state.scanControls){try{state.scanControls.stop();}catch(error){}state.scanControls=null;}
+    if(state.codeReader){try{state.codeReader.reset();}catch(error){}}
     if(state.scanStream){state.scanStream.getTracks().forEach(track=>track.stop());state.scanStream=null;}
-    const video=$("scanner-video");if(video)video.srcObject=null;
+    const video=$("scanner-video");if(video){video.pause();video.srcObject=null;}
   }
   async function startScanner(mode) {
-    state.scanMode=mode;$("start-screen").classList.add("hidden");$("import-panel").classList.add("hidden");$("workspace").classList.add("hidden");$("scan-panel").classList.remove("hidden");
-    $("scan-title").textContent=mode==="inventory"?"Scanner le numéro d’inventaire":"Scanner le numéro de série";$("manual-scan-value").value="";$("scan-status").className="status";
+    stopScanner();
+    state.scanMode=mode;
+    $("start-screen").classList.add("hidden");$("import-panel").classList.add("hidden");$("workspace").classList.add("hidden");$("scan-panel").classList.remove("hidden");
+    $("scan-title").textContent=mode==="inventory"?"Scanner le numéro d’inventaire":"Scanner le numéro de série";
+    $("manual-scan-value").value="";$("scan-status").className="status";
     if(!state.db){$("scan-status").textContent="Aucune base locale importée. Importez d’abord le fichier SQLite.";return;}
-    if(!navigator.mediaDevices?.getUserMedia){$("scan-status").textContent="Caméra indisponible. Saisissez le numéro ci-dessous.";return;}
-    if(!("BarcodeDetector" in window)){$("scan-status").textContent="Scan automatique non pris en charge par ce navigateur. Saisissez le numéro ci-dessous.";return;}
-    try{const supported=await BarcodeDetector.getSupportedFormats();const formats=["code_128","code_39","ean_13","ean_8","upc_a","upc_e","itf","qr_code","data_matrix"].filter(format=>supported.includes(format));if(!formats.length){$("scan-status").textContent="Aucun format de code compatible. Saisissez le numéro ci-dessous.";return;}state.detector=new BarcodeDetector({formats});state.scanStream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:"environment"}},audio:false});const video=$("scanner-video");video.srcObject=state.scanStream;await video.play();$("scan-status").textContent="Caméra active. Présentez le code-barres dans le cadre.";scanFrame();}
-    catch(error){stopScanner();$("scan-status").textContent=error.name==="NotAllowedError"?"Accès caméra refusé. Autorisez la caméra ou saisissez le numéro.":"Impossible d’activer la caméra. Saisissez le numéro manuellement.";}
-  }
-  async function scanFrame() {
-    if(!state.scanStream||$("scan-panel").classList.contains("hidden"))return;const video=$("scanner-video");
-    if(!state.detecting&&video.readyState>=2&&state.detector){state.detecting=true;try{const codes=await state.detector.detect(video);if(codes.length&&codes[0].rawValue){const value=codes[0].rawValue.trim();stopScanner();findScannedEquipment(value);return;}}catch(error){$("scan-status").textContent="Lecture impossible. Ajustez le cadrage ou saisissez le numéro manuellement.";}finally{state.detecting=false;}}
-    if(state.scanStream)state.scanFrame=requestAnimationFrame(scanFrame);
+    if(!navigator.mediaDevices?.getUserMedia){$("scan-status").textContent="Caméra indisponible. Ouvrez l’application dans un navigateur compatible et saisissez le numéro ci-dessous.";return;}
+    if(!window.ZXing?.BrowserMultiFormatReader){$("scan-status").textContent="Le moteur de scan n’a pas pu être chargé. Vérifiez la connexion puis rechargez la page, ou saisissez le numéro manuellement.";return;}
+    try {
+      state.codeReader=new ZXing.BrowserMultiFormatReader();
+      $("scan-status").textContent="Activation de la caméra…";
+      const video=$("scanner-video");
+      state.scanControls=await state.codeReader.decodeFromVideoDevice(undefined,video,(result,error,controls)=>{
+        if(result){
+          const value=result.getText().trim();
+          if(value){
+            if(controls)state.scanControls=controls;
+            stopScanner();
+            $("scan-status").textContent="Code lu : "+value;
+            findScannedEquipment(value);
+          }
+        }
+      });
+      $("scan-status").textContent="Caméra active. Maintenez le code-barres dans le cadre quelques instants.";
+    } catch(error) {
+      stopScanner();
+      $("scan-status").textContent=error.name==="NotAllowedError"?"Accès caméra refusé. Autorisez la caméra dans les réglages du navigateur.":"Impossible d’activer la caméra : "+(error.message||"vérifiez les permissions.")+" Vous pouvez saisir le numéro manuellement.";
+    }
   }
   function findScannedEquipment(rawValue) {
     const value=String(rawValue||"").trim();if(!value||!state.db)return;stopScanner();
