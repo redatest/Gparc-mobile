@@ -23,15 +23,17 @@
         <p class="muted">Scannez son code-barres pour retrouver rapidement sa fiche dans la base locale.</p>
         <div class="scan-choices">
           <button id="scan-inventory" class="scan-choice" type="button"><span class="scan-choice-icon">▥</span><strong>Scanner le numéro d’inventaire</strong><small>Recherche par numéro d’inventaire</small></button>
-          <button id="scan-serial" class="scan-choice" type="button"><span class="scan-choice-icon">⌁</span><strong>Scanner le numéro de série</strong><small>Recherche par numéro de série</small></button>
+          <button id="scan-serial" class="scan-choice" type="button"><span class="scan-choice-icon">⌁</span><strong>Scanner le numéro de série</strong><small>Lecture du code-barres</small></button>
+          <button id="ocr-inventory" class="scan-choice" type="button"><span class="scan-choice-icon">Aa</span><strong>Lire les chiffres (OCR)</strong><small>Reconnaissance du numéro d’inventaire imprimé</small></button>
+          <button id="ocr-serial" class="scan-choice" type="button"><span class="scan-choice-icon">T↵</span><strong>Lire le numéro de série (OCR)</strong><small>Reconnaissance du texte imprimé</small></button>
         </div>
         <button id="open-main" class="button button-primary" type="button">Accéder à la page principale</button>
         <p id="start-status" class="status" role="status"></p>
-        <p class="build-info">Version de contrôle : <code>21cd25d0</code></p>
+        <p class="build-info">Version de contrôle : <code>ocr-offline-1</code></p>
       </div>
     </section>
     <section id="scan-panel" class="scan-panel hidden">
-      <div class="scan-panel-heading"><div><p class="eyebrow">LECTURE DU CODE-BARRES</p><h1 id="scan-title">Scanner un équipement</h1><p class="muted">Placez le code-barres dans le cadre. La caméra nécessite une autorisation.</p></div><button id="close-scan" class="button button-outline" type="button">Retour</button></div>
+      <div class="scan-panel-heading"><div><p class="eyebrow">LECTURE DU CODE-BARRES</p><h1 id="scan-title">Scanner un équipement</h1><p class="muted">Placez le code-barres ou le numéro imprimé dans le cadre. La caméra nécessite une autorisation.</p></div><button id="close-scan" class="button button-outline" type="button">Retour</button></div>
       <div class="scanner-frame"><video id="scanner-video" playsinline muted></video><div class="scanner-guide"></div></div>
       <p id="scan-status" class="status" role="status">Préparation de la caméra…</p>
       <form id="manual-scan-form" class="manual-scan-form"><label for="manual-scan-value">Ou saisir le code manuellement</label><div class="manual-scan-row"><input id="manual-scan-value" class="search" type="text" autocomplete="off" placeholder="Numéro à rechercher" required><button class="button button-primary" type="submit">Rechercher</button></div></form>
@@ -65,6 +67,7 @@
   <input id="replacement-file" class="hidden" type="file" accept=".db,.sqlite,.sqlite3,application/octet-stream">
   <script src="https://cdn.jsdelivr.net/npm/sql.js@1.13.0/dist/sql-wasm.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@zxing/library@0.21.3/umd/index.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js"></script>
   <script src="./app.js"></script>
 </body>
 </html>
