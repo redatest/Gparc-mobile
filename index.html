@@ -16,7 +16,26 @@
     <button id="install-button" class="button button-light hidden" type="button">Installer</button>
   </header>
   <main>
-    <section id="import-panel" class="import-panel">
+    <section id="start-screen" class="start-screen">
+      <div class="start-card">
+        <p class="eyebrow">ACCÈS RAPIDE AU PARC</p>
+        <h1>Identifier un équipement</h1>
+        <p class="muted">Scannez son code-barres pour retrouver rapidement sa fiche dans la base locale.</p>
+        <div class="scan-choices">
+          <button id="scan-inventory" class="scan-choice" type="button"><span class="scan-choice-icon">▥</span><strong>Scanner le numéro d’inventaire</strong><small>Recherche par numéro d’inventaire</small></button>
+          <button id="scan-serial" class="scan-choice" type="button"><span class="scan-choice-icon">⌁</span><strong>Scanner le numéro de série</strong><small>Recherche par numéro de série</small></button>
+        </div>
+        <button id="open-main" class="button button-primary" type="button">Accéder à la page principale</button>
+        <p id="start-status" class="status" role="status"></p>
+      </div>
+    </section>
+    <section id="scan-panel" class="scan-panel hidden">
+      <div class="scan-panel-heading"><div><p class="eyebrow">LECTURE DU CODE-BARRES</p><h1 id="scan-title">Scanner un équipement</h1><p class="muted">Placez le code-barres dans le cadre. La caméra nécessite une autorisation.</p></div><button id="close-scan" class="button button-outline" type="button">Retour</button></div>
+      <div class="scanner-frame"><video id="scanner-video" playsinline muted></video><div class="scanner-guide"></div></div>
+      <p id="scan-status" class="status" role="status">Préparation de la caméra…</p>
+      <form id="manual-scan-form" class="manual-scan-form"><label for="manual-scan-value">Ou saisir le code manuellement</label><div class="manual-scan-row"><input id="manual-scan-value" class="search" type="text" autocomplete="off" placeholder="Numéro à rechercher" required><button class="button button-primary" type="submit">Rechercher</button></div></form>
+    </section>
+    <section id="import-panel" class="import-panel hidden">
       <div class="section-heading"><div><p class="eyebrow">BASE LOCALE</p><h1>Importer la base SQLite</h1><p class="muted">Sélectionnez une copie de <code>gparc.db</code> transférée depuis le PC Gparc.</p></div></div>
       <label class="file-drop" for="db-file"><span class="file-icon">↥</span><strong>Choisir un fichier .db</strong><span>Depuis le téléphone, une clé USB ou les fichiers copiés manuellement</span><input id="db-file" type="file" accept=".db,.sqlite,.sqlite3,application/octet-stream"></label>
       <div id="import-status" class="status" role="status">Aucune base importée.</div>
