@@ -367,7 +367,10 @@
   function findScannedEquipment(rawValue) {
     const value=String(rawValue||"").trim();if(!value||!state.db)return;stopScanner();
     const column=state.scanMode==="inventory"?"num_inv":"num_ser";const matches=joinedMateriels().filter(row=>normalize(row[column])===normalize(value));
-    $("start-status").textContent=matches.length?matches.length+" équipement(s) trouvé(s) pour « "+value+" ».":"Aucun équipement trouvé pour "+(state.scanMode==="inventory"?"le numéro d’inventaire":"le numéro de série")+" « "+value+" ». Vérifiez le mode de scan.";
+    $("start-status").className = "status " + (matches.length ? "scan-result-success" : "scan-result-error");
+    $("start-status").textContent = matches.length
+      ? "Code lu : « " + value + " ». " + matches.length + " équipement(s) trouvé(s)."
+      : "Code lu : « " + value + " », mais aucun équipement ne correspond au numéro d’inventaire / de série dans la base locale. Vérifiez le mode de scan ou saisissez le numéro manuellement.";
     $("scan-panel").classList.add("hidden");$("start-screen").classList.remove("hidden");
     if(matches.length){showMainPage();renderView("parc");const search=$("table-search");if(search){search.value=value;search.dispatchEvent(new Event("input",{bubbles:true}));}}
   }
