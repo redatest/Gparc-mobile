@@ -286,30 +286,62 @@
     $("manual-scan-value").value="";$("scan-status").className="status";
     if(!state.db){$("scan-status").textContent="Aucune base locale importée. Importez d’abord le fichier SQLite.";return;}
     if(!navigator.mediaDevices?.getUserMedia){$("scan-status").textContent="Caméra indisponible. Ouvrez l’application dans un navigateur compatible et saisissez le numéro ci-dessous.";return;}
-    if(!window.ZXing?.BrowserMultiFormatReader){$("scan-status").textContent="Le moteur de scan n’a pas pu être chargé. Vérifiez la connexion puis rechargez la page, ou saisissez le numéro manuellement.";return;}
     try {
-      const formats = [
-        ZXing.BarcodeFormat.CODE_128,
-        ZXing.BarcodeFormat.CODE_39,
-        ZXing.BarcodeFormat.CODE_93,
-        ZXing.BarcodeFormat.EAN_13,
-        ZXing.BarcodeFormat.EAN_8,
-        ZXing.BarcodeFormat.UPC_A,
-        ZXing.BarcodeFormat.UPC_E,
-        ZXing.BarcodeFormat.ITF,
-        ZXing.BarcodeFormat.CODABAR
-      ].filter(format => format !== undefined);
-      const hints = new Map();
-      hints.set(ZXing.DecodeHintType.TRY_HARDER, true);
-      if (formats.length) hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS, formats);
-      // ZXing 0.21 BrowserMultiFormatReader expects a numeric scan delay here.
-      // Passing an options object can break the decoder loop on some devices.
-      state.codeReader = new ZXing.BrowserMultiFormatReader(hints, 250);
-      $("scan-status").textContent = "Activation de la caméra arrière…";
       const video = $("scanner-video");
       video.setAttribute("autoplay", "");
       video.setAttribute("playsinline", "");
       video.muted = true;
+
+      // Prefer the browser's native barcode decoder when available.
+      if ("BarcodeDetector" in window) {
+        const supported = await BarcodeDetector.getSupportedFormats();
+        const wanted = ["code_128", "code_39", "code_93", "ean_13", "ean_8", "upc_a", "upc_e", "itf", "codabar"];
+        const detector = new BarcodeDetector({ formats: wanted.filter(format => supported.includes(format)) });
+        state.scanStream = await navigator.mediaDevices.getUserMedia({
+          audio: false,
+          video: { facingMode: { ideal: "environment" }, width: { ideal: 1920 }, height: { ideal: 1080 } }
+        });
+        video.srcObject = state.scanStream;
+        await video.play();
+        state.detecting = true;
+        $("scan-status").textContent = "Caméra active. Placez le code-barres bien net dans le cadre.";
+        const detectFrame = async () => {
+          if (!state.detecting || !video.srcObject) return;
+          try {
+            const codes = await detector.detect(video);
+            if (codes.length) {
+              const value = String(codes[0].rawValue || "").trim();
+              if (value) {
+                state.detecting = false;
+                stopScanner();
+                $("scan-status").textContent = "Code détecté : " + value;
+                findScannedEquipment(value);
+                return;
+              }
+            }
+          } catch (decodeError) {
+            console.warn("Échec ponctuel du décodage du code-barres", decodeError);
+          }
+          if (state.detecting) state.scanFrame = requestAnimationFrame(detectFrame);
+        };
+        state.scanFrame = requestAnimationFrame(detectFrame);
+        return;
+      }
+
+      if (!window.ZXing?.BrowserMultiFormatReader) {
+        $("scan-status").textContent = "Le moteur de scan n’a pas pu être chargé. Vérifiez la connexion puis rechargez la page, ou saisissez le numéro manuellement.";
+        return;
+      }
+      const formats = [
+        ZXing.BarcodeFormat.CODE_128, ZXing.BarcodeFormat.CODE_39, ZXing.BarcodeFormat.CODE_93,
+        ZXing.BarcodeFormat.EAN_13, ZXing.BarcodeFormat.EAN_8, ZXing.BarcodeFormat.UPC_A,
+        ZXing.BarcodeFormat.UPC_E, ZXing.BarcodeFormat.ITF, ZXing.BarcodeFormat.CODABAR
+      ].filter(format => format !== undefined);
+      const hints = new Map();
+      hints.set(ZXing.DecodeHintType.TRY_HARDER, true);
+      if (formats.length) hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS, formats);
+      state.codeReader = new ZXing.BrowserMultiFormatReader(hints, 250);
+      $("scan-status").textContent = "Activation de la caméra arrière…";
       state.detecting = true;
       state.scanControls = await state.codeReader.decodeFromVideoDevice(undefined, video, (result, error, controls) => {
         if (controls && !state.scanControls) state.scanControls = controls;
@@ -321,16 +353,14 @@
         $("scan-status").textContent = "Code détecté : " + value;
         findScannedEquipment(value);
       });
-      if (state.detecting) {
-        $("scan-status").textContent = "Caméra active. Approchez le code, gardez-le net et évitez les reflets.";
-      }
+      if (state.detecting) $("scan-status").textContent = "Caméra active. Approchez le code, gardez-le net et évitez les reflets.";
     } catch(error) {
       stopScanner();
       const message = error.name === "NotAllowedError"
         ? "Accès caméra refusé. Autorisez la caméra dans les réglages du navigateur."
         : error.name === "NotFoundError"
           ? "Aucune caméra compatible détectée sur cet appareil."
-          : "Impossible d’activer la caméra : " + (error.message || "vérifiez les permissions.");
+          : "Impossible d’activer le scan : " + (error.message || "vérifiez les permissions.");
       $("scan-status").textContent = message + " Vous pouvez saisir le numéro manuellement.";
     }
   }
