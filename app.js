@@ -300,15 +300,56 @@
       await video.play();
       state.detecting=true;
 
-      // Prefer the browser's native detector on Android Chrome; retain ZXing as fallback.
+      // Run native detection and ZXing in parallel: native detection may not
+      // recognize every inventory label even when the API is available.
       if("BarcodeDetector" in window) {
-        let detector;
         try {
           const supported=await window.BarcodeDetector.getSupportedFormats();
-          const wanted=["code_128","code_39","code_93","ean_13","ean_8","upc_a","upc_e","itf","codabar","qr_code"];
-          const formats=wanted.filter(format=>supported.includes(format));
-          detector=new window.BarcodeDetector(formats.length?{formats}:undefined);
-        } catch(error) { detector=null; }
+          const wanted=["code_128","code_39","code_93","ean_13","ean_8","upc_a","upc_e","itf","codabar"];
+          const nativeFormats=wanted.filter(format=>supported.includes(format));
+          state.detector=new window.BarcodeDetector(nativeFormats.length?{formats:nativeFormats}:undefined);
+          const detectFrame=async()=>{
+            if(!state.detecting)return;
+            try {
+              if(video.videoWidth) {
+                const results=await state.detector.detect(video);
+                const hit=results.find(item=>item.rawValue);
+                if(hit&&state.detecting) {
+                  const value=String(hit.rawValue).trim();
+                  state.detecting=false;stopScanner();
+                  $("scan-status").textContent="Code détecté : "+value;
+                  findScannedEquipment(value);return;
+                }
+              }
+            } catch(error) {}
+            if(state.detecting)state.scanFrame=requestAnimationFrame(detectFrame);
+          };
+          state.scanFrame=requestAnimationFrame(detectFrame);
+        } catch(error) { state.detector=null; }
+      }
+      if(!window.ZXing?.BrowserMultiFormatReader) {
+        $("scan-status").textContent="Analyse en cours. Si le code n’est pas reconnu, saisissez le numéro manuellement.";
+        return;
+      }
+      const formats=[
+        ZXing.BarcodeFormat.CODE_128,ZXing.BarcodeFormat.CODE_39,ZXing.BarcodeFormat.CODE_93,
+        ZXing.BarcodeFormat.EAN_13,ZXing.BarcodeFormat.EAN_8,ZXing.BarcodeFormat.UPC_A,
+        ZXing.BarcodeFormat.UPC_E,ZXing.BarcodeFormat.ITF,ZXing.BarcodeFormat.CODABAR
+      ].filter(format=>format!==undefined);
+      const hints=new Map();
+      hints.set(ZXing.DecodeHintType.TRY_HARDER,true);
+      if(formats.length)hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS,formats);
+      state.codeReader=new ZXing.BrowserMultiFormatReader(hints,120);
+      $("scan-status").textContent="Caméra active. Analyse en cours avec deux méthodes de lecture…";
+      state.scanControls=await state.codeReader.decodeFromVideoElement(video,(result,error)=>{
+        if(!result||!state.detecting)return;
+        const value=String(result.getText()||"").trim();
+        if(!value)return;
+        state.detecting=false;stopScanner();
+        $("scan-status").textContent="Code détecté : "+value;
+        findScannedEquipment(value);
+      });
+    } catch(error) { detector=null; }
         if(detector) {
           $("scan-status").textContent="Caméra active. Analyse du code-barres…";
           const detectFrame=async()=>{
