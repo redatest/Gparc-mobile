@@ -29,13 +29,13 @@
         </div>
         <button id="open-main" class="button button-primary" type="button">Accéder à la page principale</button>
         <p id="start-status" class="status" role="status"></p>
-        <p class="build-info">Version de contrôle : <code>ocr-field-1</code></p>
+        <p class="build-info">Version de contrôle : <code>ocr-field-2</code></p>
       </div>
     </section>
     <section id="scan-panel" class="scan-panel hidden">
       <div class="scan-panel-heading"><div><p class="eyebrow">LECTURE DU CODE-BARRES</p><h1 id="scan-title">Scanner un équipement</h1><p class="muted">Placez le code-barres ou le numéro imprimé dans le cadre. La caméra nécessite une autorisation.</p></div><button id="close-scan" class="button button-outline" type="button">Retour</button></div>
-      <div class="scanner-frame"><video id="scanner-video" playsinline muted></video><div class="scanner-guide"></div></div>
       <p id="scan-status" class="status" role="status">Préparation de la caméra…</p>
+      <div class="scanner-frame"><video id="scanner-video" playsinline muted></video><div class="scanner-guide"></div></div>
       <form id="manual-scan-form" class="manual-scan-form"><label for="manual-scan-value">Ou saisir le code manuellement</label><div class="manual-scan-row"><input id="manual-scan-value" class="search" type="text" autocomplete="off" placeholder="Numéro à rechercher" required><button class="button button-primary" type="submit">Rechercher</button></div></form>
     </section>
     <section id="import-panel" class="import-panel hidden">
