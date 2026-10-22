@@ -41,6 +41,13 @@
     const found = map[key];
     return found ? '<span class="pill ' + found[1] + '">' + esc(found[0]) + '</span>' : '<span class="pill">' + esc(value || "—") + '</span>';
   };
+    const isIdColumn = key => {
+    if (!key) return false;
+    const k = String(key).trim().toLowerCase();
+    if (k === "id" || k.startsWith("id_") || k.startsWith("ancien_id_") || k.includes("_id_") || k.endsWith("_id")) return true;
+    const label = String(prettyColumn(key) || "").trim().toLowerCase();
+    return label === "id" || label.startsWith("id ") || label.startsWith("id_") || label.startsWith("id-");
+  };
   const prettyColumn = value => ({
     id_mat:"ID matériel", num_inv:"N° inventaire", num_ser:"N° série", id_str:"ID structure", structure_nom:"Structure",
     id_typ_mat:"ID type", type_nom:"Type", lib_typ_mat:"Type", id_model_mat:"ID modèle", model_mat:"Modèle", marque_mat:"Marque",
@@ -159,7 +166,24 @@
       case "utilisateurs": return allActive("utilisateurs").map(row => ({...row, nom_complet:[row.pnom_uti,row.nom_uti].filter(Boolean).join(" ")}));
       case "references": return [...allActive("type_mat").map(r=>({...r, rubrique:"Type de matériel"})),...allActive("model_mat").map(r=>({...r, rubrique:"Modèle"})),...allActive("lieu_rep").map(r=>({...r, rubrique:"Lieu de réparation"}))];
       case "parametres": return [...allActive("parametres_materiel").map(r=>({...r, rubrique:"Paramètre matériel"})),...allActive("parametre_type_mat").map(r=>({...r, rubrique:"Paramètre par type"}))];
-      case "historique": return [...allActive("affect_mat").map(r=>({...r, rubrique:"Affectation", date_evenement:r.dat_aff || r.dat_cre})),...allActive("historique_reforme").map(r=>({...r, rubrique:"Réforme"}))].sort((a,b)=>String(b.date_evenement||b.dat_cre||"").localeCompare(String(a.date_evenement||a.dat_cre||"")));
+      case "historique": {
+        const mats = new Map(safeRows("materiel").map(m => [String(m.id_mat), m]));
+        return [
+          ...allActive("affect_mat").map(r => ({
+            ...r,
+            rubrique: "Affectation",
+            date_evenement: r.dat_aff || r.dat_cre,
+            num_inv: r.num_inv || mats.get(String(r.id_mat))?.num_inv || "—",
+            num_ser: r.num_ser || mats.get(String(r.id_mat))?.num_ser || "—"
+          })),
+          ...allActive("historique_reforme").map(r => ({
+            ...r,
+            rubrique: "Réforme",
+            num_inv: mats.get(String(r.id_mat))?.num_inv || "—",
+            num_ser: mats.get(String(r.id_mat))?.num_ser || "—"
+          }))
+        ].sort((a,b)=>String(b.date_evenement||b.dat_cre||"").localeCompare(String(a.date_evenement||a.dat_cre||"")));
+      }
       default: return [];
     }
   }
@@ -168,17 +192,22 @@
       parc:["num_inv","num_ser","type","marque_mat","modele","structure","utilisateur","etat_mat","statut_mat","etat_reforme","ram","disk","cpu","se","ip"],
       pannes:["dat_pan","num_inv","num_ser","diag_pan","type","modele","utilisateur","structure","technicien","lieu_reparation","eta_pan","dat_env_rep","dat_ret_rep"],
       reformes:["num_inv","num_ser","type","marque_mat","modele","structure","etat_reforme","motif_reforme","date_proposition_reforme","annee_reforme","lot_reforme","date_reforme"],
-      structures:["cod_str","lib_str","structure_mere","id_str_mere","archiv"],
-      utilisateurs:["nom_complet","nom_uti","pnom_uti","mail_uti","id_str_mere","archiv"],
+      structures:["cod_str","lib_str","structure_mere","archiv"],
+      utilisateurs:["nom_complet","nom_uti","pnom_uti","mail_uti","archiv"],
       references:["rubrique","cod_typ_mat","lib_typ_mat","marque_mat","model_mat","nom_lieu_rep","categorie_lieu","tel_lieu_rep","adr_lieu_rep","archiv"],
       parametres:["rubrique","categorie","valeur","description","ordre","code_param","libelle_param","type_champ","unite","options_predefinies","archiv"],
-      historique:["rubrique","date_evenement","dat_aff","action_aff","id_mat","id_str","id_uti","etat_reforme","ancien_etat_reforme","motif_reforme","obs_aff","archiv"]
+      historique:["rubrique","date_evenement","num_inv","num_ser","dat_aff","action_aff","etat_reforme","ancien_etat_reforme","motif_reforme","obs_aff","archiv"]
     }[view] || [];
     const available = new Set(rows.flatMap(row => Object.keys(row)));
-    const chosen = preferred.filter(key => available.has(key));
+    const chosen = preferred.filter(key => available.has(key) && !isIdColumn(key));
     const known = new Set(chosen);
-    for (const key of rows.slice(0,20).flatMap(row => Object.keys(row))) if (!known.has(key) && chosen.length < 18 && !["image_url"].includes(key)) { chosen.push(key); known.add(key); }
-    return chosen;
+    for (const key of rows.slice(0,20).flatMap(row => Object.keys(row))) {
+      if (!known.has(key) && chosen.length < 18 && !["image_url"].includes(key) && !isIdColumn(key)) {
+        chosen.push(key);
+        known.add(key);
+      }
+    }
+    return chosen.filter(key => !isIdColumn(key));
   }
   function displayCell(key, value) {
     if (["eta_pan","etat_mat","statut_mat","etat_reforme"].includes(key)) return formatStatus(value);
@@ -189,9 +218,10 @@
     return esc(value);
   }
   function buildTable(rows, cols) {
+    const cleanCols = cols.filter(key => !isIdColumn(key));
     if (!rows.length) return '<div class="empty">Aucune donnée à afficher pour cette rubrique dans la base importée.</div>';
-    const head = cols.map(key=>'<th>'+esc(prettyColumn(key))+'</th>').join("");
-    const body = rows.map(row=>'<tr>'+cols.map(key=>'<td>'+displayCell(key,row[key])+'</td>').join("")+'</tr>').join("");
+    const head = cleanCols.map(key=>'<th>'+esc(prettyColumn(key))+'</th>').join("");
+    const body = rows.map(row=>'<tr>'+cleanCols.map(key=>'<td>'+displayCell(key,row[key])+'</td>').join("")+'</tr>').join("");
     return '<div class="table-wrap"><table><thead><tr>'+head+'</tr></thead><tbody>'+body+'</tbody></table></div>';
   }
   function renderTableView(view) {
