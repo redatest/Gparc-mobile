@@ -463,11 +463,11 @@
       if (!state.ocrWorker) {
         $("scan-status").textContent = "Initialisation du moteur OCR (première utilisation)…";
         state.ocrWorker = await Tesseract.createWorker("eng", 1, {
-          workerPath: "https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/worker.min.js",
-          corePath: "https://cdn.jsdelivr.net/npm/tesseract.js-core@5.1.1",
-          langPath: "https://tessdata.projectnaptha.com/4.0.0",
+          workerPath: "./vendor/tesseract.js/dist/worker.min.js",
+          corePath: "./vendor/tesseract.js-core",
+          langPath: "./vendor/traineddata",
           cacheMethod: "write",
-          gzip: true
+          gzip: false
         });
         await state.ocrWorker.setParameters({
           tessedit_char_whitelist: "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz-./",
