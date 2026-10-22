@@ -327,73 +327,100 @@
   function stopScanner() {
     if(state.scanFrame)cancelAnimationFrame(state.scanFrame);
     if(state.ocrTimer)clearTimeout(state.ocrTimer);
-    state.ocrTimer=0;state.ocrBusy=false;state.scanFrame=0;state.detecting=false;
+    state.ocrTimer=0;state.ocrBusy=false;state.scanFrame=0;state.detecting=false;state.detector=null;
     if(state.scanControls){try{state.scanControls.stop();}catch(error){}state.scanControls=null;}
     if(state.codeReader){try{state.codeReader.reset();}catch(error){}}
     if(state.scanStream){state.scanStream.getTracks().forEach(track=>track.stop());state.scanStream=null;}
     const video=$("scanner-video");if(video){video.pause();video.srcObject=null;}
   }
+  function prepareBarcodeLookup(mode) {
+    const column = mode === "inventory" ? "num_inv" : "num_ser";
+    state.barcodeLookup = joinedMateriels()
+      .map(row => ({ raw: String(row[column] == null ? "" : row[column]).trim(), key: normalizeCode(row[column]) }))
+      .filter(item => item.raw && item.key.length >= 4);
+    state.barcodeCandidate = "";
+    state.barcodeCandidateCount = 0;
+    state.scanStatusCandidate = "";
+  }
+  function acceptBarcodeCandidate(rawValue) {
+    const key = normalizeCode(rawValue);
+    if (!key || key.length < 4 || !state.detecting) return false;
+    const matches = (state.barcodeLookup || []).filter(item => item.key === key);
+    if (matches.length !== 1) {
+      state.barcodeCandidate = "";
+      state.barcodeCandidateCount = 0;
+      if (state.scanStatusCandidate !== key) {
+        state.scanStatusCandidate = key;
+        $("scan-status").textContent = matches.length > 1
+          ? "Code détecté mais numéro ambigu dans la base. Stabilisez le code dans le cadre ou saisissez le numéro manuellement."
+          : "Code détecté mais non reconnu dans la base pour ce mode. Ajustez le cadrage ou saisissez le numéro manuellement.";
+      }
+      return false;
+    }
+    if (state.barcodeCandidate === key) state.barcodeCandidateCount++;
+    else { state.barcodeCandidate = key; state.barcodeCandidateCount = 1; }
+    $("scan-status").textContent = "Code reconnu. Confirmation de la lecture " + Math.min(state.barcodeCandidateCount, 2) + "/2…";
+    if (state.barcodeCandidateCount < 2) return false;
+    state.detecting = false;
+    stopScanner();
+    showScannedValue(matches[0].raw);
+    return true;
+  }
   async function startScanner(mode) {
     stopScanner();
-    state.lastScanMethod="barcode";
-    state.scanMode=mode;
-    state.scanReturnTo="start";
+    state.lastScanMethod = "barcode";
+    state.scanMode = mode;
+    state.scanReturnTo = "start";
     $("scan-panel").classList.remove("manual-only");
-    $("start-screen").classList.add("hidden");$("import-panel").classList.add("hidden");$("workspace").classList.add("hidden");$("scan-panel").classList.remove("hidden");
-    $("scan-title").textContent=mode==="inventory"?"Scanner le numéro d’inventaire":"Scanner le numéro de série";
-    $("manual-scan-value").value="";$("scan-status").className="status";
-    if(!state.db){$("scan-status").textContent="Aucune base locale importée. Importez d’abord le fichier SQLite.";return;}
-    if(!navigator.mediaDevices?.getUserMedia){$("scan-status").textContent="Caméra indisponible. Ouvrez l’application dans un navigateur compatible et saisissez le numéro ci-dessous.";return;}
-    try {
-      const video = $("scanner-video");
-      video.setAttribute("autoplay", "");
-      video.setAttribute("playsinline", "");
-      video.muted = true;
+    $("start-screen").classList.add("hidden"); $("import-panel").classList.add("hidden"); $("workspace").classList.add("hidden"); $("scan-panel").classList.remove("hidden");
+    $("scan-title").textContent = mode === "inventory" ? "Scanner le numéro d’inventaire" : "Scanner le numéro de série";
+    $("manual-scan-value").value = "";
+    $("manual-scan-value").classList.remove("scan-value-success");
+    $("scan-status").className = "status";
+    if (!state.db) { $("scan-status").textContent = "Aucune base locale importée. Importez d’abord le fichier SQLite."; return; }
+    if (!navigator.mediaDevices?.getUserMedia) { $("scan-status").textContent = "Caméra indisponible. Ouvrez l’application dans un navigateur compatible et saisissez le numéro ci-dessous."; return; }
+    prepareBarcodeLookup(mode);
+    if (!state.barcodeLookup.length) { $("scan-status").textContent = "Aucun numéro exploitable n’est disponible dans la base pour ce mode. Vous pouvez saisir le numéro manuellement."; return; }
+    const video = $("scanner-video");
+    video.setAttribute("autoplay", ""); video.setAttribute("playsinline", ""); video.muted = true;
 
-      // Prefer the browser's native barcode decoder when available.
-      if ("BarcodeDetector" in window) {
+    // Native BarcodeDetector first; use ZXing if native initialization fails.
+    if ("BarcodeDetector" in window) {
+      try {
         const supported = await BarcodeDetector.getSupportedFormats();
         const wanted = ["code_128", "code_39", "code_93", "ean_13", "ean_8", "upc_a", "upc_e", "itf", "codabar"];
-        const detector = new BarcodeDetector({ formats: wanted.filter(format => supported.includes(format)) });
-        state.scanStream = await navigator.mediaDevices.getUserMedia({
-          audio: false,
-          video: { facingMode: { ideal: "environment" }, width: { ideal: 1920 }, height: { ideal: 1080 } }
-        });
+        const formats = wanted.filter(format => supported.includes(format));
+        if (!formats.length) throw new Error("Aucun format compatible avec BarcodeDetector.");
+        const detector = new BarcodeDetector({ formats });
+        state.scanStream = await navigator.mediaDevices.getUserMedia({ audio: false, video: { facingMode: { ideal: "environment" }, width: { ideal: 1280 }, height: { ideal: 720 } } });
         video.srcObject = state.scanStream;
         await video.play();
+        state.detector = detector;
         state.detecting = true;
         $("scan-status").textContent = "Caméra active. Placez le code-barres bien net dans le cadre.";
         const detectFrame = async () => {
           if (!state.detecting || !video.srcObject) return;
           try {
             const codes = await detector.detect(video);
-            if (codes.length) {
-              const value = String(codes[0].rawValue || "").trim();
-              if (value) {
-                state.detecting = false;
-                stopScanner();
-                showScannedValue(value);
-                return;
-              }
-            }
-          } catch (decodeError) {
-            console.warn("Échec ponctuel du décodage du code-barres", decodeError);
-          }
+            for (const code of codes || []) if (acceptBarcodeCandidate(code.rawValue)) return;
+          } catch (error) { console.warn("Échec ponctuel du décodage natif", error); }
           if (state.detecting) state.scanFrame = requestAnimationFrame(detectFrame);
         };
         state.scanFrame = requestAnimationFrame(detectFrame);
         return;
+      } catch (nativeError) {
+        console.warn("BarcodeDetector indisponible; bascule vers ZXing", nativeError);
+        if (state.scanStream) state.scanStream.getTracks().forEach(track => track.stop());
+        state.scanStream = null; state.detector = null; state.detecting = false;
+        video.pause(); video.srcObject = null;
       }
-
-      if (!window.ZXing?.BrowserMultiFormatReader) {
-        $("scan-status").textContent = "Le moteur de scan n’a pas pu être chargé. Vérifiez la connexion puis rechargez la page, ou saisissez le numéro manuellement.";
-        return;
-      }
-      const formats = [
-        ZXing.BarcodeFormat.CODE_128, ZXing.BarcodeFormat.CODE_39, ZXing.BarcodeFormat.CODE_93,
-        ZXing.BarcodeFormat.EAN_13, ZXing.BarcodeFormat.EAN_8, ZXing.BarcodeFormat.UPC_A,
-        ZXing.BarcodeFormat.UPC_E, ZXing.BarcodeFormat.ITF, ZXing.BarcodeFormat.CODABAR
-      ].filter(format => format !== undefined);
+    }
+    if (!window.ZXing?.BrowserMultiFormatReader) {
+      $("scan-status").textContent = "Le moteur de scan n’a pas pu être chargé. Vérifiez la connexion puis rechargez la page, ou saisissez le numéro manuellement.";
+      return;
+    }
+    try {
+      const formats = [ZXing.BarcodeFormat.CODE_128, ZXing.BarcodeFormat.CODE_39, ZXing.BarcodeFormat.CODE_93, ZXing.BarcodeFormat.EAN_13, ZXing.BarcodeFormat.EAN_8, ZXing.BarcodeFormat.UPC_A, ZXing.BarcodeFormat.UPC_E, ZXing.BarcodeFormat.ITF, ZXing.BarcodeFormat.CODABAR].filter(format => format !== undefined);
       const hints = new Map();
       hints.set(ZXing.DecodeHintType.TRY_HARDER, true);
       if (formats.length) hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS, formats);
@@ -402,21 +429,14 @@
       state.detecting = true;
       state.scanControls = await state.codeReader.decodeFromVideoDevice(undefined, video, (result, error, controls) => {
         if (controls && !state.scanControls) state.scanControls = controls;
-        if (!result || !state.detecting) return;
-        const value = String(result.getText() || "").trim();
-        if (!value) return;
-        state.detecting = false;
-        stopScanner();
-        showScannedValue(value);
+        if (result && state.detecting) acceptBarcodeCandidate(result.getText());
       });
       if (state.detecting) $("scan-status").textContent = "Caméra active. Approchez le code, gardez-le net et évitez les reflets.";
-    } catch(error) {
+    } catch (error) {
       stopScanner();
-      const message = error.name === "NotAllowedError"
-        ? "Accès caméra refusé. Autorisez la caméra dans les réglages du navigateur."
-        : error.name === "NotFoundError"
-          ? "Aucune caméra compatible détectée sur cet appareil."
-          : "Impossible d’activer le scan : " + (error.message || "vérifiez les permissions.");
+      const message = error.name === "NotAllowedError" ? "Accès caméra refusé. Autorisez la caméra dans les réglages du navigateur."
+        : error.name === "NotFoundError" ? "Aucune caméra compatible détectée sur cet appareil."
+        : "Impossible d’activer le scan : " + (error.message || "vérifiez les permissions.");
       $("scan-status").textContent = message + " Vous pouvez saisir le numéro manuellement.";
     }
   }
