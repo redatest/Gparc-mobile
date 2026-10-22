@@ -49,7 +49,7 @@ self.addEventListener("fetch", event => {
         }).catch(() => caches.match("./index.html")))
       );
     }
-  } else if (((url.hostname === "cdn.jsdelivr.net" && (/sql(?:-wasm)?\.(?:js|wasm)/.test(url.pathname) || url.pathname.includes("/npm/@zxing/library@") || url.pathname.includes("/npm/tesseract.js@") || url.pathname.includes("/npm/tesseract.js-core@"))) || url.hostname === "tessdata.projectnaptha.com")) {
+  } else if (url.hostname === "cdn.jsdelivr.net" && (/sql(?:-wasm)?\.(?:js|wasm)/.test(url.pathname) || url.pathname.includes("/npm/@zxing/library@"))) {
     event.respondWith((async () => {
       const cached = await caches.match(request);
       if (cached) return cached;
