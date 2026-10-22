@@ -533,6 +533,7 @@
             }
             if (maxLuma - minLuma < 28) {
               $("scan-status").textContent = "Placez l’étiquette dans le cadre, rapprochez le téléphone et améliorez l’éclairage.";
+              state.ocrTimer = window.setTimeout(scanOCRFrame, 250);
               return;
             }
             const contrast = 255 / Math.max(1, maxLuma - minLuma);
