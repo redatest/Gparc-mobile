@@ -1,7 +1,7 @@
 (() => {
   "use strict";
   const $ = id => document.getElementById(id);
-  const state = { SQL: null, db: null, dbBytes: null, dbName: "", importedAt: "", view: "dashboard", rows: [], filtered: [], page: 1, pageSize: 50, search: "", filter: "all", scanMode: "inventory", scanReturnTo: "start", scanStream: null, scanFrame: 0, detector: null, detecting: false, scanControls: null, codeReader: null, ocrWorker: null, ocrBusy: false, ocrTimer: 0, ocrLastCandidate: "", ocrCandidateCount: 0 };
+  const state = { lastScanMethod: "barcode", lastFoundEquipment: null, SQL: null, db: null, dbBytes: null, dbName: "", importedAt: "", view: "dashboard", rows: [], filtered: [], page: 1, pageSize: 50, search: "", filter: "all", scanMode: "inventory", scanReturnTo: "start", scanStream: null, scanFrame: 0, detector: null, detecting: false, scanControls: null, codeReader: null, ocrWorker: null, ocrBusy: false, ocrTimer: 0, ocrLastCandidate: "", ocrCandidateCount: 0 };
   const PAGE_SIZE = 50;
   const viewInfo = {
     dashboard: ["TABLEAU DE BORD", "Vue d’ensemble", "Indicateurs calculés à partir de la copie importée."],
@@ -305,6 +305,7 @@
   }
   async function startScanner(mode) {
     stopScanner();
+    state.lastScanMethod="barcode";
     state.scanMode=mode;
     state.scanReturnTo="start";
     $("scan-panel").classList.remove("manual-only");
@@ -391,6 +392,7 @@
   }
   async function startOCR(mode) {
     stopScanner();
+    state.lastScanMethod = "ocr";
     state.scanMode = mode;
     state.scanReturnTo = "start";
     $("scan-panel").classList.remove("manual-only");
@@ -528,15 +530,113 @@
     $("scan-status").textContent = "Lecture réussie : « " + value + " ». Le numéro est prêt dans le champ vert ; appuyez sur « Rechercher » pour afficher l’équipement.";
     field.focus();
   }
+    function closeEquipmentModal() {
+    $("equipment-modal").classList.add("hidden");
+  }
+  function showEquipmentModal(row) {
+    if (!row) return;
+    state.lastFoundEquipment = row;
+    const inv = row.num_inv ? String(row.num_inv).trim() : "—";
+    const ser = row.num_ser ? String(row.num_ser).trim() : "—";
+    const type = row.type_nom || row.lib_typ_mat || row.id_typ_mat || "—";
+    const marque = row.marque_mat || row.marque_modele || "—";
+    const modele = row.modele_nom || row.model_mat || row.id_model_mat || "—";
+    const utilisateur = row.nom_uti ? (row.pnom_uti ? `${row.nom_uti} ${row.pnom_uti}` : row.nom_uti) : (row.id_uti || "Non affecté");
+    const structure = row.structure_nom || (row.structure_code ? `${row.structure_code} - ${row.structure_nom || ""}` : (row.id_str || "Non renseignée"));
+    const etat = row.etat_mat || "—";
+    const statut = row.statut_mat || "—";
+    const etatReforme = row.etat_reforme || "aucune";
+
+    $("modal-equipment-title").textContent = inv !== "—" ? `N° ${inv}` : `Série : ${ser}`;
+    $("modal-equipment-body").innerHTML = `
+      <div class="attr-list">
+        <div class="attr-item highlight">
+          <span class="attr-label">Numéro d’inventaire</span>
+          <span class="attr-value strong mono">${esc(inv)}</span>
+        </div>
+        <div class="attr-item">
+          <span class="attr-label">Numéro de série</span>
+          <span class="attr-value mono">${esc(ser)}</span>
+        </div>
+        <div class="attr-item">
+          <span class="attr-label">Type</span>
+          <span class="attr-value">${esc(type)}</span>
+        </div>
+        <div class="attr-item">
+          <span class="attr-label">Marque</span>
+          <span class="attr-value">${esc(marque)}</span>
+        </div>
+        <div class="attr-item">
+          <span class="attr-label">Modèle</span>
+          <span class="attr-value">${esc(modele)}</span>
+        </div>
+        <div class="attr-item">
+          <span class="attr-label">Utilisateur</span>
+          <span class="attr-value">${esc(utilisateur)}</span>
+        </div>
+        <div class="attr-item">
+          <span class="attr-label">Structure</span>
+          <span class="attr-value">${esc(structure)}</span>
+        </div>
+        <div class="attr-item">
+          <span class="attr-label">État</span>
+          <div class="attr-value">${formatStatus(etat)}</div>
+        </div>
+        <div class="attr-item">
+          <span class="attr-label">Statut</span>
+          <div class="attr-value">${formatStatus(statut)}</div>
+        </div>
+        <div class="attr-item">
+          <span class="attr-label">État réforme</span>
+          <div class="attr-value">${formatStatus(etatReforme)}</div>
+        </div>
+      </div>
+      ${(row.ram || row.disk || row.cpu || row.ip || row.ordi) ? `
+        <div class="attr-tech-summary">
+          <span class="attr-tech-title">Caractéristiques complémentaires</span>
+          <div class="attr-chips">
+            ${row.ram ? `<span class="chip">RAM: ${esc(row.ram)}</span>` : ""}
+            ${row.disk ? `<span class="chip">Disque: ${esc(row.disk)}</span>` : ""}
+            ${row.cpu ? `<span class="chip">CPU: ${esc(row.cpu)}</span>` : ""}
+            ${row.ip ? `<span class="chip">IP: ${esc(row.ip)}</span>` : ""}
+            ${row.ordi ? `<span class="chip">Nom: ${esc(row.ordi)}</span>` : ""}
+          </div>
+        </div>
+      ` : ""}
+    `;
+    $("equipment-modal").classList.remove("hidden");
+  }
+  function returnToScan() {
+    closeEquipmentModal();
+    if (state.lastScanMethod === "ocr") {
+      startOCR(state.scanMode || "inventory");
+    } else {
+      startScanner(state.scanMode || "inventory");
+    }
+  }
+  function goToMainFromModal() {
+    const row = state.lastFoundEquipment;
+    closeEquipmentModal();
+    showMainPage();
+    renderView("parc");
+    const search = $("table-search");
+    if (search && row) {
+      search.value = row.num_inv || row.num_ser || "";
+      search.dispatchEvent(new Event("input", { bubbles: true }));
+    }
+  }
   function findScannedEquipment(rawValue) {
     const value=String(rawValue||"").trim();if(!value||!state.db)return;stopScanner();
     const column=state.scanMode==="inventory"?"num_inv":"num_ser";const matches=joinedMateriels().filter(row=>normalize(row[column])===normalize(value));
-    $("start-status").className = "status " + (matches.length ? "scan-result-success" : "scan-result-error");
-    $("start-status").textContent = matches.length
-      ? "Code lu : « " + value + " ». " + matches.length + " équipement(s) trouvé(s)."
-      : "Code lu : « " + value + " », mais aucun équipement ne correspond au numéro d’inventaire / de série dans la base locale. Vérifiez le mode de scan ou saisissez le numéro manuellement.";
-    $("scan-panel").classList.add("hidden");$("start-screen").classList.remove("hidden");
-    if(matches.length){showMainPage();renderView("parc");const search=$("table-search");if(search){search.value=value;search.dispatchEvent(new Event("input",{bubbles:true}));}}
+    if (matches.length) {
+      $("scan-panel").classList.add("hidden");
+      showEquipmentModal(matches[0]);
+    } else {
+      $("start-status").className = "status scan-result-error";
+      $("start-status").textContent = "Code lu : « " + value + " », mais aucun équipement ne correspond au numéro d’inventaire / de série dans la base locale. Vérifiez le mode de scan ou saisissez le numéro manuellement.";
+      $("scan-panel").classList.add("hidden");
+      $("start-screen").classList.remove("hidden");
+    }
   }
   function openStore() {
     return new Promise((resolve,reject)=>{
@@ -604,6 +704,11 @@
     $("manual-scan-value").addEventListener("input",()=>$("manual-scan-value").classList.remove("scan-value-success"));
     $("manual-scan-form").addEventListener("submit",event=>{event.preventDefault();findScannedEquipment($("manual-scan-value").value);});
     $("manual-scan-open").addEventListener("click",showStartScreen);
+    $("modal-close-btn").addEventListener("click",()=>{closeEquipmentModal();showStartScreen();});
+    $("modal-scan-again-btn").addEventListener("click",returnToScan);
+    $("modal-open-main-btn").addEventListener("click",goToMainFromModal);
+    $("equipment-modal").addEventListener("click",event=>{if(event.target===$("equipment-modal")){closeEquipmentModal();showStartScreen();}});
+    window.addEventListener("keydown",event=>{if(event.key==="Escape"&&!$("equipment-modal").classList.contains("hidden")){closeEquipmentModal();showStartScreen();}});
     $("refresh-view").addEventListener("click",()=>renderView(state.view));
     $("db-file").addEventListener("change",event=>importFile(event.target.files?.[0]));
     $("replace-db").addEventListener("click",()=>$("replacement-file").click());

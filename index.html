@@ -29,7 +29,7 @@
           <button id="ocr-serial" class="scan-choice" type="button"><span class="scan-choice-icon">T↵</span><strong>Lire le numéro de série (OCR)</strong><small>Reconnaissance du texte imprimé</small></button>
         </div>
         <button id="open-main" class="button button-primary" type="button">Accéder à la page principale</button>
-        <p class="build-info">Version de contrôle : <code>ocr-field-7</code></p>
+        <p class="build-info">Version de contrôle : <code>ocr-field-8</code></p>
       </div>
     </section>
     <section id="scan-panel" class="scan-panel hidden">
@@ -63,6 +63,29 @@
       <div id="view-content" aria-live="polite"></div>
       <footer class="footer-note">Données issues d’un instantané SQLite. Pour consulter les dernières modifications, importez une nouvelle copie depuis Gparc.</footer>
     </section>
+      <div id="equipment-modal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="modal-equipment-title">
+      <div class="modal-card">
+        <div class="modal-header">
+          <div class="modal-header-badge">
+            <span class="modal-success-icon">✓</span>
+            <div>
+              <p class="modal-eyebrow">ÉQUIPEMENT IDENTIFIÉ</p>
+              <h2 id="modal-equipment-title" class="modal-title">Fiche équipement</h2>
+            </div>
+          </div>
+          <button id="modal-close-btn" class="modal-close" type="button" aria-label="Fermer">✕</button>
+        </div>
+        <div id="modal-equipment-body" class="modal-body"></div>
+        <div class="modal-actions">
+          <button id="modal-scan-again-btn" class="button button-outline" type="button">
+            <span class="btn-icon">↻</span> Retour vers le scan
+          </button>
+          <button id="modal-open-main-btn" class="button button-primary" type="button">
+            <span class="btn-icon">⇥</span> Accès à la page principale
+          </button>
+        </div>
+      </div>
+    </div>
   </main>
   <input id="replacement-file" class="hidden" type="file" accept=".db,.sqlite,.sqlite3,application/octet-stream">
   <script src="https://cdn.jsdelivr.net/npm/sql.js@1.13.0/dist/sql-wasm.js"></script>
