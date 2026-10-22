@@ -513,12 +513,34 @@
         if (!state.ocrBusy && video.videoWidth && video.videoHeight) {
           state.ocrBusy = true;
           try {
-            // A smaller crop avoids processing the full 1080p image on every OCR pass.
-            const sx = Math.round(video.videoWidth * 0.08), sy = Math.round(video.videoHeight * 0.36);
-            const sw = Math.round(video.videoWidth * 0.84), sh = Math.round(video.videoHeight * 0.28);
-            const scale = Math.min(1.15, 1400 / sw);
-            canvas.width = Math.max(1, Math.round(sw * scale)); canvas.height = Math.max(1, Math.round(sh * scale));
+            // Capture a larger area around the on-screen guide and enlarge small printed characters.
+            const sx = Math.round(video.videoWidth * 0.05), sy = Math.round(video.videoHeight * 0.27);
+            const sw = Math.round(video.videoWidth * 0.90), sh = Math.round(video.videoHeight * 0.46);
+            const scale = Math.min(2, 2200 / sw);
+            canvas.width = Math.max(1, Math.round(sw * scale));
+            canvas.height = Math.max(1, Math.round(sh * scale));
             context.drawImage(video, sx, sy, sw, sh, 0, 0, canvas.width, canvas.height);
+
+            // Convert to grayscale and stretch contrast before OCR; skip nearly uniform frames.
+            const frame = context.getImageData(0, 0, canvas.width, canvas.height);
+            const pixels = frame.data;
+            let minLuma = 255, maxLuma = 0;
+            for (let p = 0; p < pixels.length; p += 4) {
+              const luma = Math.round(0.299 * pixels[p] + 0.587 * pixels[p + 1] + 0.114 * pixels[p + 2]);
+              pixels[p] = pixels[p + 1] = pixels[p + 2] = luma;
+              if (luma < minLuma) minLuma = luma;
+              if (luma > maxLuma) maxLuma = luma;
+            }
+            if (maxLuma - minLuma < 28) {
+              $("scan-status").textContent = "Placez l’étiquette dans le cadre, rapprochez le téléphone et améliorez l’éclairage.";
+              return;
+            }
+            const contrast = 255 / Math.max(1, maxLuma - minLuma);
+            for (let p = 0; p < pixels.length; p += 4) {
+              const value = Math.max(0, Math.min(255, Math.round((pixels[p] - minLuma) * contrast)));
+              pixels[p] = pixels[p + 1] = pixels[p + 2] = value;
+            }
+            context.putImageData(frame, 0, 0);
             const { data } = await state.ocrWorker.recognize(canvas);
             const recognizedText = String(data.text || "").toUpperCase();
             const tokens = recognizedText.match(/[A-Z0-9][A-Z0-9./-]{3,}/g) || [];
