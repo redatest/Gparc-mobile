@@ -506,62 +506,119 @@
       state.detecting = true;
       state.ocrLastCandidate = ""; state.ocrCandidateCount = 0;
       $("scan-status").textContent = "OCR actif. Placez uniquement le numéro dans le cadre et rapprochez le téléphone.";
+      // Deux zones complémentaires : étiquette entière, puis texte sous le code-barres.
+      // Cela évite de faire dépendre la lecture de la seule zone centrale.
       const canvas = document.createElement("canvas");
       const context = canvas.getContext("2d", { willReadFrequently: true });
+      const lowerCanvas = document.createElement("canvas");
+      const lowerContext = lowerCanvas.getContext("2d", { willReadFrequently: true });
+
+      function makeOCRCrop(targetCanvas, targetContext, xRatio, yRatio, widthRatio, heightRatio, binarize) {
+        const sx = Math.round(video.videoWidth * xRatio);
+        const sy = Math.round(video.videoHeight * yRatio);
+        const sw = Math.max(1, Math.round(video.videoWidth * widthRatio));
+        const sh = Math.max(1, Math.round(video.videoHeight * heightRatio));
+        const scale = Math.min(2.5, 2200 / sw);
+        targetCanvas.width = Math.max(1, Math.round(sw * scale));
+        targetCanvas.height = Math.max(1, Math.round(sh * scale));
+        targetContext.drawImage(video, sx, sy, sw, sh, 0, 0, targetCanvas.width, targetCanvas.height);
+
+        const frame = targetContext.getImageData(0, 0, targetCanvas.width, targetCanvas.height);
+        const pixels = frame.data;
+        const histogram = new Uint32Array(256);
+        let minLuma = 255, maxLuma = 0, total = 0;
+        for (let p = 0; p < pixels.length; p += 4) {
+          const luma = Math.round(0.299 * pixels[p] + 0.587 * pixels[p + 1] + 0.114 * pixels[p + 2]);
+          pixels[p] = pixels[p + 1] = pixels[p + 2] = luma;
+          histogram[luma]++;
+          if (luma < minLuma) minLuma = luma;
+          if (luma > maxLuma) maxLuma = luma;
+          total++;
+        }
+        if (maxLuma - minLuma < 22) return false;
+
+        // Étirement du contraste pour le texte imprimé ou écrit au feutre.
+        const contrast = 255 / Math.max(1, maxLuma - minLuma);
+        for (let p = 0; p < pixels.length; p += 4) {
+          const value = Math.max(0, Math.min(255, Math.round((pixels[p] - minLuma) * contrast)));
+          pixels[p] = pixels[p + 1] = pixels[p + 2] = value;
+        }
+
+        // Seuillage d'Otsu facultatif, surtout utile pour les caractères au feutre.
+        if (binarize) {
+          let sum = 0;
+          for (let i = 0; i < 256; i++) sum += i * histogram[i];
+          let sumBackground = 0, weightBackground = 0, bestVariance = -1, threshold = 145;
+          for (let i = 0; i < 256; i++) {
+            weightBackground += histogram[i];
+            if (!weightBackground) continue;
+            const weightForeground = total - weightBackground;
+            if (!weightForeground) break;
+            sumBackground += i * histogram[i];
+            const meanBackground = sumBackground / weightBackground;
+            const meanForeground = (sum - sumBackground) / weightForeground;
+            const variance = weightBackground * weightForeground * Math.pow(meanBackground - meanForeground, 2);
+            if (variance > bestVariance) { bestVariance = variance; threshold = i; }
+          }
+          for (let p = 0; p < pixels.length; p += 4) {
+            const value = pixels[p] < threshold ? 0 : 255;
+            pixels[p] = pixels[p + 1] = pixels[p + 2] = value;
+          }
+        }
+        targetContext.putImageData(frame, 0, 0);
+        return true;
+      }
+
+      const matchOCRText = recognizedText => {
+        const text = String(recognizedText || "").toUpperCase();
+        const tokens = text.match(/[A-Z0-9][A-Z0-9./-]{3,}/g) || [];
+        const normalizedText = normalizeCode(text);
+        let matched = canonical.find(item => normalizedText.includes(item.key))?.raw || null;
+        if (!matched) matched = tokens.map(matchCandidate).find(Boolean) || null;
+        if (!matched && tokens.length > 1) {
+          for (let i = 0; i < tokens.length && !matched; i++) {
+            let joined = "";
+            for (let j = i; j < Math.min(tokens.length, i + 4); j++) {
+              joined += tokens[j];
+              matched = matchCandidate(joined);
+              if (matched) break;
+            }
+          }
+        }
+        return { matched, tokens };
+      };
+
+      state.detecting = true;
+      state.ocrLastCandidate = ""; state.ocrCandidateCount = 0;
+      $("scan-status").textContent = "OCR actif. Placez l’étiquette entière dans le cadre ; le texte sous le code-barres et le numéro au feutre seront essayés séparément.";
       const scanOCRFrame = async () => {
         if (!state.detecting || !video.srcObject) return;
         if (!state.ocrBusy && video.videoWidth && video.videoHeight) {
           state.ocrBusy = true;
           try {
-            // Capture a larger area around the on-screen guide and enlarge small printed characters.
-            const sx = Math.round(video.videoWidth * 0.05), sy = Math.round(video.videoHeight * 0.27);
-            const sw = Math.round(video.videoWidth * 0.90), sh = Math.round(video.videoHeight * 0.46);
-            const scale = Math.min(2, 2200 / sw);
-            canvas.width = Math.max(1, Math.round(sw * scale));
-            canvas.height = Math.max(1, Math.round(sh * scale));
-            context.drawImage(video, sx, sy, sw, sh, 0, 0, canvas.width, canvas.height);
+            let recognizedText = "";
+            let result = { matched: null, tokens: [] };
 
-            // Convert to grayscale and stretch contrast before OCR; skip nearly uniform frames.
-            const frame = context.getImageData(0, 0, canvas.width, canvas.height);
-            const pixels = frame.data;
-            let minLuma = 255, maxLuma = 0;
-            for (let p = 0; p < pixels.length; p += 4) {
-              const luma = Math.round(0.299 * pixels[p] + 0.587 * pixels[p + 1] + 0.114 * pixels[p + 2]);
-              pixels[p] = pixels[p + 1] = pixels[p + 2] = luma;
-              if (luma < minLuma) minLuma = luma;
-              if (luma > maxLuma) maxLuma = luma;
+            // Passe 1 : étiquette entière, utile si le numéro est écrit au feutre ou placé ailleurs.
+            if (makeOCRCrop(canvas, context, 0.05, 0.24, 0.90, 0.52, false)) {
+              const first = await state.ocrWorker.recognize(canvas, { rectangle: undefined });
+              recognizedText = String(first.data.text || "").toUpperCase();
+              result = matchOCRText(recognizedText);
             }
-            if (maxLuma - minLuma < 28) {
-              $("scan-status").textContent = "Placez l’étiquette dans le cadre, rapprochez le téléphone et améliorez l’éclairage.";
-              state.ocrTimer = window.setTimeout(scanOCRFrame, 250);
-              return;
+
+            // Passe 2 : zone basse, où se trouve généralement le numéro imprimé sous le code-barres.
+            // Seuillage noir/blanc pour renforcer les traits fins et les caractères épais.
+            if (!result.matched && makeOCRCrop(lowerCanvas, lowerContext, 0.10, 0.43, 0.80, 0.29, true)) {
+              await state.ocrWorker.setParameters({ tessedit_pageseg_mode: "7" });
+              const second = await state.ocrWorker.recognize(lowerCanvas);
+              const secondText = String(second.data.text || "").toUpperCase();
+              const secondResult = matchOCRText(secondText);
+              if (secondResult.matched) result = secondResult;
+              if (secondText.trim()) recognizedText = (recognizedText + " " + secondText).trim();
             }
-            const contrast = 255 / Math.max(1, maxLuma - minLuma);
-            for (let p = 0; p < pixels.length; p += 4) {
-              const value = Math.max(0, Math.min(255, Math.round((pixels[p] - minLuma) * contrast)));
-              pixels[p] = pixels[p + 1] = pixels[p + 2] = value;
-            }
-            context.putImageData(frame, 0, 0);
-            const { data } = await state.ocrWorker.recognize(canvas);
-            const recognizedText = String(data.text || "").toUpperCase();
-            const tokens = recognizedText.match(/[A-Z0-9][A-Z0-9./-]{3,}/g) || [];
-            // First search the entire OCR result after removing spaces/punctuation. This catches
-            // the right number even when Tesseract splits it into several tokens or reads extra text.
-            const normalizedText = normalizeCode(recognizedText);
-            let matched = canonical.find(item => normalizedText.includes(item.key))?.raw || null;
-            if (!matched) matched = tokens.map(matchCandidate).find(Boolean) || null;
-            // If OCR splits a serial into adjacent pieces, also test joined token windows.
-            if (!matched && tokens.length > 1) {
-              for (let i = 0; i < tokens.length && !matched; i++) {
-                let joined = "";
-                for (let j = i; j < Math.min(tokens.length, i + 4); j++) {
-                  joined += tokens[j];
-                  matched = matchCandidate(joined);
-                  if (matched) break;
-                }
-              }
-            }
-            if (matched) {
+
+            if (result.matched) {
+              const matched = result.matched;
               if (state.ocrLastCandidate === matched) state.ocrCandidateCount++;
               else { state.ocrLastCandidate = matched; state.ocrCandidateCount = 1; }
               $("scan-status").textContent = "Numéro probable : " + matched + " · confirmation " + state.ocrCandidateCount + "/2";
@@ -572,16 +629,17 @@
               }
             } else {
               state.ocrLastCandidate = ""; state.ocrCandidateCount = 0;
+              const tokens = recognizedText.match(/[A-Z0-9][A-Z0-9./-]{3,}/g) || [];
               $("scan-status").textContent = tokens.length
-                ? "Texte lu : « " + tokens.slice(0,2).join(" ") + " ». Numéro non reconnu dans la base : rapprochez et centrez l’étiquette."
-                : "Lecture en cours… rapprochez le téléphone et assurez une bonne lumière.";
+                ? "Texte détecté : « " + tokens.slice(0, 3).join(" ") + " », mais aucun numéro confirmé dans la base. Gardez l’étiquette entière dans le cadre."
+                : "Lecture en cours… rapprochez le téléphone, évitez les reflets et gardez l’étiquette entière dans le cadre.";
             }
           } catch (ocrError) {
             console.warn("Erreur de reconnaissance OCR", ocrError);
-            $("scan-status").textContent = "Lecture en cours. Gardez le numéro net, centré et bien éclairé.";
+            $("scan-status").textContent = "Lecture en cours. Gardez l’étiquette nette et bien éclairée ; essayez aussi de cadrer le numéro écrit au feutre.";
           } finally { state.ocrBusy = false; }
         }
-        if (state.detecting) state.ocrTimer = window.setTimeout(scanOCRFrame, 250);
+        if (state.detecting) state.ocrTimer = window.setTimeout(scanOCRFrame, 350);
       };
       state.ocrTimer = window.setTimeout(scanOCRFrame, 100);
     } catch (error) {
