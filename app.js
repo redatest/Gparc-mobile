@@ -546,6 +546,10 @@
 
         // Seuillage d'Otsu facultatif, surtout utile pour les caractères au feutre.
         if (binarize) {
+          // Recalculer l'histogramme après l'étirement du contraste : les deux images
+          // doivent utiliser la même échelle de luminosité.
+          histogram.fill(0);
+          for (let p = 0; p < pixels.length; p += 4) histogram[pixels[p]]++;
           let sum = 0;
           for (let i = 0; i < 256; i++) sum += i * histogram[i];
           let sumBackground = 0, weightBackground = 0, bestVariance = -1, threshold = 145;
