@@ -601,7 +601,8 @@
 
             // Passe 1 : étiquette entière, utile si le numéro est écrit au feutre ou placé ailleurs.
             if (makeOCRCrop(canvas, context, 0.05, 0.24, 0.90, 0.52, false)) {
-              const first = await state.ocrWorker.recognize(canvas, { rectangle: undefined });
+              await state.ocrWorker.setParameters({ tessedit_pageseg_mode: "11" });
+              const first = await state.ocrWorker.recognize(canvas);
               recognizedText = String(first.data.text || "").toUpperCase();
               result = matchOCRText(recognizedText);
             }
