@@ -475,9 +475,12 @@
           preserve_interword_spaces: "0"
         });
       }
-      const column = mode === "inventory" ? "num_inv" : "num_ser";
-      const materiels = joinedMateriels().filter(row => row[column] != null && String(row[column]).trim());
-      const canonical = materiels.map(row => ({ raw: String(row[column]).trim(), key: normalizeCode(row[column]) })).filter(item => item.key.length >= 4);
+      // Le mode automatique cherche le texte lu dans les deux champs : numéro d’inventaire et numéro de série.
+      const columnsToSearch = mode === "auto" ? ["num_inv", "num_ser"] : [mode === "inventory" ? "num_inv" : "num_ser"];
+      const canonical = [...new Set(joinedMateriels().flatMap(row =>
+        columnsToSearch.map(column => row[column]).filter(value => value != null && String(value).trim())
+          .map(value => String(value).trim())
+      ))].map(raw => ({ raw, key: normalizeCode(raw) })).filter(item => item.key.length >= 4);
       const exactIndex = new Map(canonical.map(item => [item.key, item.raw]));
       const levenshteinOne = (a, b) => {
         if (a === b) return true;
@@ -629,15 +632,34 @@
               $("scan-status").textContent = "Numéro probable : " + matched + " · confirmation " + state.ocrCandidateCount + "/2";
               if (state.ocrCandidateCount >= 2) {
                 state.detecting = false;
-                showScannedValue(matched);
+                if (mode === "auto") {
+                  const rows = joinedMateriels();
+                  const invMatch = rows.some(row => normalizeCode(row.num_inv) === normalizeCode(matched));
+                  state.scanMode = invMatch ? "inventory" : "serial";
+                }
+                showScannedValue(matched, true);
                 return;
               }
             } else {
-              state.ocrLastCandidate = ""; state.ocrCandidateCount = 0;
               const tokens = recognizedText.match(/[A-Z0-9][A-Z0-9./-]{3,}/g) || [];
-              $("scan-status").textContent = tokens.length
-                ? "Texte détecté : « " + tokens.slice(0, 3).join(" ") + " », mais aucun numéro confirmé dans la base. Gardez l’étiquette entière dans le cadre."
-                : "Lecture en cours… rapprochez le téléphone, évitez les reflets et gardez l’étiquette entière dans le cadre.";
+              // Même sans correspondance dans la base, conserver la lecture OCR stable dans le champ vert.
+              const readable = tokens.find(token => normalizeCode(token).length >= 4) || "";
+              if (mode === "auto" && readable) {
+                if (state.ocrLastCandidate === readable) state.ocrCandidateCount++;
+                else { state.ocrLastCandidate = readable; state.ocrCandidateCount = 1; }
+                $("scan-status").textContent = "Texte lu : « " + readable + " », vérification de la lecture " + state.ocrCandidateCount + "/2. Aucun équipement correspondant n’a encore été confirmé.";
+                if (state.ocrCandidateCount >= 2) {
+                  state.detecting = false;
+                  state.scanMode = "auto";
+                  showScannedValue(readable, false);
+                  return;
+                }
+              } else {
+                state.ocrLastCandidate = ""; state.ocrCandidateCount = 0;
+                $("scan-status").textContent = tokens.length
+                  ? "Texte détecté : « " + tokens.slice(0, 3).join(" ") + " », mais aucun numéro confirmé. Gardez l’étiquette entière dans le cadre."
+                  : "Lecture en cours… rapprochez le téléphone, évitez les reflets et gardez l’étiquette entière dans le cadre.";
+              }
             }
           } catch (ocrError) {
             console.warn("Erreur de reconnaissance OCR", ocrError);
@@ -655,15 +677,17 @@
   function normalizeCode(value) {
     return String(value == null ? "" : value).toUpperCase().replace(/[^A-Z0-9]/g, "");
   }
-  function showScannedValue(rawValue) {
+  function showScannedValue(rawValue, foundInDatabase = true) {
     const value = String(rawValue || "").trim();
     if (!value) return;
     stopScanner();
     const field = $("manual-scan-value");
     field.value = value;
     field.classList.add("scan-value-success");
-    $("scan-status").className = "status scan-result-success";
-    $("scan-status").textContent = "Lecture réussie : « " + value + " ». Le numéro est prêt dans le champ vert ; appuyez sur « Rechercher » pour afficher l’équipement.";
+    $("scan-status").className = foundInDatabase ? "status scan-result-success" : "status scan-result-error";
+    $("scan-status").textContent = foundInDatabase
+      ? "Lecture réussie : « " + value + " ». Le numéro est prêt dans le champ vert ; appuyez sur « Rechercher » pour afficher l’équipement."
+      : "Numéro lu : « " + value + " », mais aucun équipement correspondant n’a été confirmé dans la base. Vérifiez le numéro dans le champ vert, puis appuyez sur « Rechercher » pour lancer la recherche.";
     field.focus();
   }
     function closeEquipmentModal() {
@@ -763,7 +787,7 @@
   }
   function findScannedEquipment(rawValue) {
     const value=String(rawValue||"").trim();if(!value||!state.db)return;stopScanner();
-    const column=state.scanMode==="inventory"?"num_inv":"num_ser";const matches=joinedMateriels().filter(row=>normalize(row[column])===normalize(value));
+    const columns=state.scanMode==="auto"?["num_inv","num_ser"]:[state.scanMode==="inventory"?"num_inv":"num_ser"];const matches=joinedMateriels().filter(row=>columns.some(column=>normalize(row[column])===normalize(value)));
     if (matches.length) {
       $("scan-panel").classList.add("hidden");
       showEquipmentModal(matches[0]);
@@ -834,8 +858,7 @@
     $("open-main").addEventListener("click",showMainPage);
     $("scan-inventory").addEventListener("click",()=>startScanner("inventory"));
     $("scan-serial").addEventListener("click",()=>startScanner("serial"));
-    $("ocr-inventory").addEventListener("click",()=>startOCR("inventory"));
-    $("ocr-serial").addEventListener("click",()=>startOCR("serial"));
+    $("ocr-auto").addEventListener("click",()=>startOCR("auto"));
     $("close-scan").addEventListener("click",()=>{stopScanner();$("scan-panel").classList.add("hidden");$("scan-panel").classList.remove("manual-only");$("workspace").classList.add("hidden");$("import-panel").classList.add("hidden");$("start-screen").classList.remove("hidden");});
     $("manual-scan-value").addEventListener("input",()=>$("manual-scan-value").classList.remove("scan-value-success"));
     $("manual-scan-form").addEventListener("submit",event=>{event.preventDefault();findScannedEquipment($("manual-scan-value").value);});
