@@ -1,4 +1,4 @@
-const CACHE_NAME = "gparc-mobile-shell-v29";
+const CACHE_NAME = "gparc-mobile-shell-v30";
 const APP_SHELL = ["./", "./index.html", "./styles.css", "./app.js", "./manifest.json", "./icons/icon.svg"];
 
 self.addEventListener("install", event => {
