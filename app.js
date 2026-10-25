@@ -792,10 +792,15 @@
       $("scan-panel").classList.add("hidden");
       showEquipmentModal(matches[0]);
     } else {
-      $("start-status").className = "status scan-result-error";
-      $("start-status").textContent = "Code lu : « " + value + " », mais aucun équipement ne correspond au numéro d’inventaire / de série dans la base locale. Vérifiez le mode de scan ou saisissez le numéro manuellement.";
-      $("scan-panel").classList.add("hidden");
-      $("start-screen").classList.remove("hidden");
+      const field = $("manual-scan-value");
+      field.value = value;
+      field.classList.add("scan-value-success");
+      $("scan-status").className = "status scan-result-error";
+      $("scan-status").textContent = "Numéro lu : « " + value + " », mais aucun équipement correspondant n’a été trouvé dans la base locale. Le numéro reste affiché dans le champ vert : vérifiez-le ou corrigez-le, puis relancez la recherche.";
+      $("scan-panel").classList.remove("hidden");
+      $("start-screen").classList.add("hidden");
+      field.focus();
+      field.select();
     }
   }
   function openStore() {
