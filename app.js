@@ -606,8 +606,9 @@
             let recognizedText = "";
             let result = { matched: null, tokens: [] };
 
-            // Passe 1 : étiquette entière, utile si le numéro est écrit au feutre ou placé ailleurs.
-            if (makeOCRCrop(canvas, context, 0.05, 0.24, 0.90, 0.52, false)) {
+            // Passe 1 : zone large, du haut au bas de l’étiquette. Le numéro peut être écrit seul,
+            // sans code-barres et à n’importe quelle hauteur dans l’image.
+            if (makeOCRCrop(canvas, context, 0.03, 0.08, 0.94, 0.84, false)) {
               await state.ocrWorker.setParameters({ tessedit_pageseg_mode: "11" });
               const first = await state.ocrWorker.recognize(canvas);
               recognizedText = String(first.data.text || "").toUpperCase();
@@ -623,6 +624,17 @@
               const secondResult = matchOCRText(secondText);
               if (secondResult.matched) result = secondResult;
               if (secondText.trim()) recognizedText = (recognizedText + " " + secondText).trim();
+            }
+
+            // Passe 3 : le numéro manuscrit seul peut être mieux reconnu comme une ligne unique.
+            // On binarise la zone large puis on demande à Tesseract de lire une seule ligne.
+            if (!result.matched && makeOCRCrop(canvas, context, 0.03, 0.08, 0.94, 0.84, true)) {
+              await state.ocrWorker.setParameters({ tessedit_pageseg_mode: "7" });
+              const third = await state.ocrWorker.recognize(canvas);
+              const thirdText = String(third.data.text || "").toUpperCase();
+              const thirdResult = matchOCRText(thirdText);
+              if (thirdResult.matched) result = thirdResult;
+              if (thirdText.trim()) recognizedText = (recognizedText + " " + thirdText).trim();
             }
 
             if (result.matched) {
