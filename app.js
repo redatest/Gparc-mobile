@@ -68,7 +68,7 @@
     return window.GparcDatabase.query(state.db, sql, params);
   }
   const dataQueries = window.GparcDatabase.createDataQueries({ query, tableExists, allActive, safeRows });
-  const tableRenderer = window.GparcDatabase.createTableRenderer({ isIdColumn, esc, formatStatus, formatDate, prettyColumn });
+  const tableRenderer = window.GparcTableRenderer.createTableRenderer({ isIdColumn, esc, formatStatus, formatDate, prettyColumn });
   function tableExists(name) {
     return !!query("SELECT name FROM sqlite_master WHERE type='table' AND name = ?", [name]).length;
   }
