@@ -1,6 +1,6 @@
 const CACHE_NAME = "gparc-mobile-shell-v38";
 const APP_SHELL = ["./", "./index.html", "./styles.css", "./app.js", "./database.js",
-  "./filters.js", "./manifest.json", "./icons/icon.svg", "./icons/logo%20gparc.jpg"];
+  "./js/filters.js", "./manifest.json", "./icons/icon.svg", "./icons/logo%20gparc.jpg"];
 
 self.addEventListener("install", event => {
   event.waitUntil(
