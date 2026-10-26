@@ -4,32 +4,10 @@
   const state = { lastScanMethod: "barcode", lastFoundEquipment: null, SQL: null, db: null, dbBytes: null, dbName: "", importedAt: "", view: "dashboard", rows: [], filtered: [], page: 1, pageSize: 50, search: "", filter: "all", scanMode: "inventory", scanReturnTo: "start", scanStream: null, scanFrame: 0, detector: null, detecting: false, scanControls: null, codeReader: null, ocrWorker: null, ocrBusy: false, ocrTimer: 0, ocrLastCandidate: "", ocrCandidateCount: 0 };
   const { PAGE_SIZE, viewInfo, tableTitles } = window.GparcAppConfig;
   const { esc, normalize, asNum, formatDate, formatStatus, isIdColumn, prettyColumn } = window.GparcFormatters;
-  function query(sql, params = []) {
-    return window.GparcDatabase.query(state.db, sql, params);
-  }
+  const dataAccess = window.GparcDataAccess.createDataAccess({ state, asNum, normalize });
+  const { query, tableExists, columns, safeRows, count, allActive } = dataAccess;
   const dataQueries = window.GparcDatabase.createDataQueries({ query, tableExists, allActive, safeRows });
   const tableRenderer = window.GparcTableRenderer.createTableRenderer({ isIdColumn, esc, formatStatus, formatDate, prettyColumn });
-  function tableExists(name) {
-    return !!query("SELECT name FROM sqlite_master WHERE type='table' AND name = ?", [name]).length;
-  }
-  function columns(name) {
-    if (!tableExists(name)) return [];
-    return query('PRAGMA table_info("' + name.replace(/"/g, '""') + '")').map(row => row.name);
-  }
-  function safeRows(table, limit = 10000) {
-    if (!tableExists(table)) return [];
-    return query('SELECT * FROM "' + table.replace(/"/g, '""') + '" LIMIT ' + Math.max(1, Math.min(limit, 20000)));
-  }
-  function count(table, where = "") {
-    if (!tableExists(table)) return 0;
-    return asNum(query('SELECT COUNT(*) AS n FROM "' + table + '"' + where)[0]?.n);
-  }
-  function allActive(table, alias = "") {
-    if (!tableExists(table)) return [];
-    const c = columns(table);
-    const where = c.includes("archiv") ? " WHERE " + (alias ? alias + "." : "") + "archiv = 'N'" : "";
-    return safeRows(table).filter(row => !("archiv" in row) || normalize(row.archiv) !== "o");
-  }
   const dashboardView = window.GparcDashboard.createDashboard({
     joinedMateriels, joinedPannes, $, esc, asNum, count
   });
