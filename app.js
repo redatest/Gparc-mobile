@@ -80,9 +80,6 @@
     if (!tableExists(name)) return [];
     return query('PRAGMA table_info("' + name.replace(/"/g, '""') + '")').map(row => row.name);
   }
-  function col(table, name, alias) {
-    return columns(table).includes(name) ? (alias ? alias + "." : "") + '"' + name + '"' : "NULL";
-  }
   function safeRows(table, limit = 10000) {
     if (!tableExists(table)) return [];
     return query('SELECT * FROM "' + table.replace(/"/g, '""') + '" LIMIT ' + Math.max(1, Math.min(limit, 20000)));
@@ -307,22 +304,6 @@
     stopScanner();$("start-screen").classList.add("hidden");$("scan-panel").classList.add("hidden");
     if(state.db){$("import-panel").classList.add("hidden");$("workspace").classList.remove("hidden");renderView("dashboard");}
     else{$("workspace").classList.add("hidden");$("import-panel").classList.remove("hidden");$("import-status").textContent="Importez une copie SQLite pour consulter les équipements ou utiliser le scan.";}
-  }
-  function openManualScan() {
-    stopScanner();
-    state.scanReturnTo = "workspace";
-    $("start-screen").classList.add("hidden");
-    $("import-panel").classList.add("hidden");
-    $("workspace").classList.add("hidden");
-    $("scan-panel").classList.remove("hidden");
-    $("scan-panel").classList.add("manual-only");
-    $("scan-title").textContent = state.scanMode === "inventory" ? "Saisie manuelle du numéro d’inventaire" : "Saisie manuelle du numéro de série";
-    $("scan-status").className = "status";
-    $("scan-status").textContent = "Saisissez le numéro ci-dessous, puis appuyez sur « Rechercher ». ";
-    $("manual-scan-value").value = "";
-    $("manual-scan-value").classList.remove("scan-value-success");
-    $("manual-scan-value").placeholder = state.scanMode === "inventory" ? "Numéro d’inventaire" : "Numéro de série";
-    $("manual-scan-value").focus();
   }
   function stopScanner() {
     if(state.scanFrame)cancelAnimationFrame(state.scanFrame);
