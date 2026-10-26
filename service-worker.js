@@ -1,4 +1,4 @@
-const CACHE_NAME = "gparc-mobile-shell-v46";
+const CACHE_NAME = "gparc-mobile-shell-v47";
 const APP_SHELL = ["./", "./index.html", "./styles.css", "./app.js", "./database.js",
   "./js/table-renderer.js", "./js/dashboard.js", "./js/view-manager.js", "./js/app-shell.js", "./js/scanner.js", "./js/equipment-view.js", "./js/local-database.js", "./js/app-init.js", "./js/filters.js", "./manifest.json", "./icons/icon.svg", "./icons/logo%20gparc.jpg"];
 
