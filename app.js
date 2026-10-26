@@ -65,13 +65,7 @@
     archiv:"Archivé", dat_cre:"Date création", dat_mod:"Date modification"
   }[value] || String(value || "").replace(/_/g, " "));
   function query(sql, params = []) {
-    const stmt = state.db.prepare(sql);
-    try {
-      stmt.bind(params);
-      const out = [];
-      while (stmt.step()) out.push(stmt.getAsObject());
-      return out;
-    } finally { stmt.free(); }
+    return window.GparcDatabase.query(state.db, sql, params);
   }
   function tableExists(name) {
     return !!query("SELECT name FROM sqlite_master WHERE type='table' AND name = ?", [name]).length;
