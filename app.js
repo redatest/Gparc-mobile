@@ -67,6 +67,7 @@
   function query(sql, params = []) {
     return window.GparcDatabase.query(state.db, sql, params);
   }
+  const dataQueries = window.GparcDatabase.createDataQueries({ query, tableExists });
   function tableExists(name) {
     return !!query("SELECT name FROM sqlite_master WHERE type='table' AND name = ?", [name]).length;
   }
@@ -122,31 +123,10 @@
       '<section class="panel" style="margin-top:14px"><h2>À propos de cette copie</h2><p class="muted">La vue d’ensemble est calculée localement depuis le fichier importé. Les chiffres reflètent l’instantané de la base, pas les éventuelles modifications postérieures effectuées sur le PC Gparc.</p></section>';
   }
   function joinedMateriels() {
-    if (!tableExists("materiel")) return [];
-    return query(`SELECT m.*, s.lib_str AS structure_nom, s.cod_str AS structure_code,
-      t.lib_typ_mat AS type_nom, mod.model_mat AS modele_nom, mod.marque_mat AS marque_modele,
-      u.nom_uti, u.pnom_uti
-      FROM materiel m
-      LEFT JOIN structures s ON m.id_str=s.id_str
-      LEFT JOIN type_mat t ON m.id_typ_mat=t.id_typ_mat
-      LEFT JOIN model_mat mod ON m.id_model_mat=mod.id_model_mat
-      LEFT JOIN utilisateurs u ON m.id_uti=u.id_uti
-      WHERE COALESCE(m.archiv,'N')='N' ORDER BY m.id_mat DESC`);
+    return dataQueries.joinedMateriels();
   }
   function joinedPannes() {
-    if (!tableExists("panne")) return [];
-    return query(`SELECT p.*, m.num_inv AS materiel_num_inv, m.num_ser AS materiel_num_ser,
-      m.id_uti, m.etat_reforme, mod.model_mat AS modele_nom, mod.marque_mat AS marque_modele,
-      t.lib_typ_mat AS type_nom, u.nom_uti, u.pnom_uti, s.lib_str AS structure_nom,
-      l.nom_lieu_rep AS lieu_reparation
-      FROM panne p
-      LEFT JOIN materiel m ON p.id_mat=m.id_mat
-      LEFT JOIN model_mat mod ON m.id_model_mat=mod.id_model_mat
-      LEFT JOIN type_mat t ON m.id_typ_mat=t.id_typ_mat
-      LEFT JOIN utilisateurs u ON m.id_uti=u.id_uti
-      LEFT JOIN structures s ON p.id_str=s.id_str
-      LEFT JOIN lieu_rep l ON p.id_lieu_rep=l.id_lieu_rep
-      WHERE COALESCE(p.archiv,'N')='N' ORDER BY p.id_pan DESC`);
+    return dataQueries.joinedPannes();
   }
   function viewData(view) {
     switch(view) {
