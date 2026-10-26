@@ -21,7 +21,7 @@
         $("table-search").addEventListener("input", event => { state.search = normalize(event.target.value); state.page = 1; updateTableResults(view); });
         const filterEl = $("status-filter");
         if (filterEl) filterEl.addEventListener("change", event => {state.filter=event.target.value;state.page=1;updateTableResults(view);});
-        $("page-size").addEventListener("change", event => {state.pageSize=Number(event.target.value)||PAGE_SIZE;state.page=1;updateTableResults(view);});
+        $("page-size").addEventListener("change", event => {state.pageSize=Number(event.target.value)||pageSize;state.page=1;updateTableResults(view);});
         updateTableResults(view);
       }
       function updateTableResults(view) {
