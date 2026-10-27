@@ -32,3 +32,8 @@ Remplacer le premier chemin par celui de la base utilisée par Gparc. Si le fich
 - L’application ne transmet pas la base SQLite à un serveur.
 - Pour actualiser les informations, il faut importer une nouvelle copie.
 - L’installation PWA et le service worker nécessitent un hébergement HTTPS (ou `localhost` pour les tests).
+
+## Diagramme fonctionnel de l'application:
+
+pour avoir une bonne visualisation de l'architecture de l'application, visiter le lien:
+https://gitdiagram.com/redatest/gparc-mobile
