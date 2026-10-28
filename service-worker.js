@@ -1,6 +1,6 @@
-const CACHE_NAME = "gparc-mobile-shell-v50";
+const CACHE_NAME = "gparc-mobile-shell-v51";
 const APP_SHELL = ["./", "./index.html", "./styles.css", "./app.js", "./database.js", "./js/data-access.js", "./js/app-config.js", "./js/formatters.js",
-  "./js/table-renderer.js", "./js/dashboard.js", "./js/view-manager.js", "./js/app-shell.js", "./js/scanner.js", "./js/equipment-view.js", "./js/local-database.js", "./js/app-init.js", "./js/filters.js", "./manifest.json", "./icons/icon.svg", "./icons/logo%20gparc.jpg"];
+  "./js/table-renderer.js", "./js/dashboard.js", "./js/view-manager.js", "./js/app-shell.js", "./js/scanner.js", "./js/equipment-view.js", "./js/local-database.js", "./js/app-init.js", "./js/filters.js", "./manifest.json", "./icons/icon.svg", "./icons/logo%20gparc.jpg", "./vendor/tesseract.js/dist/worker.min.js", "./vendor/tesseract.js-core/tesseract-core-simd-lstm.wasm", "./vendor/traineddata/eng.traineddata"];
 
 self.addEventListener("install", event => {
   event.waitUntil(
